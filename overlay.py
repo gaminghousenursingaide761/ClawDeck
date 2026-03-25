@@ -99,8 +99,19 @@ class OverlayTick(NSObject):
         self.win = create_overlay_window()
         self.visible = False
         self.last_rect = None
+        self.last_color = None
 
         return self
+
+    def _update_border_color(self, rgb):
+        """Update the overlay border color if it changed."""
+        if rgb == self.last_color:
+            return
+        r, g, b = rgb
+        border_color = CGColorCreateGenericRGB(r / 255, g / 255, b / 255, ALPHA)
+        layer = self.win.contentView().layer()
+        layer.setBorderColor_(border_color)
+        self.last_color = rgb
 
     def tick_(self, timer):
         """Called every CHECK_INTERVAL by NSTimer."""
@@ -109,6 +120,11 @@ class OverlayTick(NSObject):
             data = json.loads(text)
 
             if data.get("visible", False):
+                # Update color if provided
+                color_list = data.get("color")
+                if color_list and len(color_list) == 3:
+                    self._update_border_color(tuple(color_list))
+
                 rect = (data["x"], data["y"], data["w"], data["h"])
                 if rect != self.last_rect or not self.visible:
                     show_overlay(self.win, self.primary_h, *rect)

@@ -2,3 +2,4 @@ streamdeck
 Pillow
 pyobjc-framework-Quartz
 pyobjc-framework-Cocoa
+rumps

@@ -7,3 +7,5 @@ overlay.log
 config.json
 TODO.md
 CLAUDE.md
+build/
+dist/

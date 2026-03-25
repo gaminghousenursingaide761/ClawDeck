@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ClawDeck Settings</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffb000;
+    margin-bottom: 20px;
+  }
+  .section {
+    background: #242424;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .section h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #333;
+  }
+  .row:last-child { border-bottom: none; }
+  .row label {
+    font-size: 14px;
+    color: #ccc;
+  }
+  .row .sublabel {
+    font-size: 11px;
+    color: #777;
+    margin-top: 2px;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 140px;
+    height: 6px;
+    border-radius: 3px;
+    background: #444;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffb000;
+    cursor: pointer;
+  }
+  input[type="number"], input[type="text"] {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    font-size: 14px;
+    text-align: right;
+    outline: none;
+  }
+  input[type="number"]:focus, input[type="text"]:focus {
+    border-color: #ffb000;
+  }
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+  }
+  .toggle input { display: none; }
+  .toggle .slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #444;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle .slider::after {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .slider {
+    background: #ffb000;
+  }
+  .toggle input:checked + .slider::after {
+    transform: translateX(20px);
+  }
+  select {
+    padding: 6px 10px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    font-size: 14px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  select:focus { border-color: #ffb000; }
+  .mic-display {
+    font-size: 14px;
+    color: #ffb000;
+    font-family: "SF Mono", monospace;
+  }
+  .btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary {
+    background: #ffb000;
+    color: #000;
+  }
+  .btn-secondary {
+    background: #333;
+    color: #ccc;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .range-val {
+    font-size: 13px;
+    color: #ffb000;
+    font-family: "SF Mono", monospace;
+    min-width: 36px;
+    text-align: right;
+  }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #242424;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #888;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #555;
+  }
+  .status-dot.active { background: #4caf50; }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffb000;
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .layout-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .layout-card {
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .layout-card:hover { border-color: #666; }
+  .layout-card.active {
+    border-color: #ffb000;
+    background: #2a2200;
+  }
+  .layout-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: #ccc;
+    margin-bottom: 3px;
+  }
+  .layout-card.active .layout-label { color: #ffb000; }
+  .layout-svg {
+    width: 100%;
+    height: auto;
+  }
+  .layout-svg rect {
+    fill: #444;
+    stroke: #555;
+    stroke-width: 0.5;
+  }
+  .layout-svg .big-zone { fill: #ffb000; opacity: 0.6; }
+  .layout-svg .enter-key { fill: #333; }
+  .layout-card.active .layout-svg rect { fill: #555; }
+  .layout-card.active .layout-svg .big-zone { fill: #ffb000; opacity: 0.8; }
+  .layout-card.active .layout-svg .enter-key { fill: #444; }
+  .layout-count {
+    font-size: 8px;
+    color: #666;
+    margin-top: 2px;
+  }
+  .color-group { margin-bottom: 14px; }
+  .color-group:last-child { margin-bottom: 0; }
+  .color-group-label {
+    font-size: 11px;
+    color: #777;
+    margin-bottom: 8px;
+  }
+  .color-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .color-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .color-item span {
+    font-size: 12px;
+    color: #aaa;
+  }
+  input[type="color"] {
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    border: 2px solid #444;
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>ClawDeck Settings</h1>
+
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Not connected</span>
+</div>
+
+<div class="section">
+  <h2>Display</h2>
+  <div class="row">
+    <div>
+      <label>Brightness</label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="range" id="brightness" min="0" max="100" value="80">
+      <span class="range-val" id="brightnessVal">80</span>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Layout</h2>
+  <input type="hidden" id="layout" value="default">
+  <div class="layout-grid">
+    <div class="layout-card" data-layout="default" onclick="selectLayout('default')">
+      <div class="layout-label">Default</div>
+      <svg viewBox="0 0 50 30" class="layout-svg">
+        <rect x="1" y="1" width="9" height="9" rx="1"/>
+        <rect x="11" y="1" width="9" height="9" rx="1"/>
+        <rect x="21" y="1" width="9" height="9" rx="1"/>
+        <rect x="31" y="1" width="9" height="9" rx="1"/>
+        <rect x="41" y="1" width="8" height="9" rx="1"/>
+        <rect x="1" y="11" width="9" height="9" rx="1"/>
+        <rect x="11" y="11" width="9" height="9" rx="1"/>
+        <rect x="21" y="11" width="9" height="9" rx="1"/>
+        <rect x="31" y="11" width="9" height="9" rx="1"/>
+        <rect x="41" y="11" width="8" height="9" rx="1"/>
+        <rect x="1" y="21" width="9" height="8" rx="1"/>
+        <rect x="11" y="21" width="9" height="8" rx="1"/>
+        <rect x="21" y="21" width="9" height="8" rx="1"/>
+        <rect x="31" y="21" width="9" height="8" rx="1"/>
+        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
+      </svg>
+      <div class="layout-count">14 terminals</div>
+    </div>
+    <div class="layout-card" data-layout="quad" onclick="selectLayout('quad')">
+      <div class="layout-label">Quad</div>
+      <svg viewBox="0 0 50 30" class="layout-svg">
+        <rect x="1" y="1" width="19" height="19" rx="1" class="big-zone"/>
+        <rect x="21" y="1" width="9" height="9" rx="1"/>
+        <rect x="31" y="1" width="9" height="9" rx="1"/>
+        <rect x="41" y="1" width="8" height="9" rx="1"/>
+        <rect x="21" y="11" width="9" height="9" rx="1"/>
+        <rect x="31" y="11" width="9" height="9" rx="1"/>
+        <rect x="41" y="11" width="8" height="9" rx="1"/>
+        <rect x="1" y="21" width="9" height="8" rx="1"/>
+        <rect x="11" y="21" width="9" height="8" rx="1"/>
+        <rect x="21" y="21" width="9" height="8" rx="1"/>
+        <rect x="31" y="21" width="9" height="8" rx="1"/>
+        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
+      </svg>
+      <div class="layout-count">11 terminals</div>
+    </div>
+    <div class="layout-card" data-layout="double_quad" onclick="selectLayout('double_quad')">
+      <div class="layout-label">Double Quad</div>
+      <svg viewBox="0 0 50 30" class="layout-svg">
+        <rect x="1" y="1" width="19" height="19" rx="1" class="big-zone"/>
+        <rect x="21" y="1" width="19" height="19" rx="1" class="big-zone"/>
+        <rect x="41" y="1" width="8" height="9" rx="1"/>
+        <rect x="41" y="11" width="8" height="9" rx="1"/>
+        <rect x="1" y="21" width="9" height="8" rx="1"/>
+        <rect x="11" y="21" width="9" height="8" rx="1"/>
+        <rect x="21" y="21" width="9" height="8" rx="1"/>
+        <rect x="31" y="21" width="9" height="8" rx="1"/>
+        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
+      </svg>
+      <div class="layout-count">8 terminals</div>
+    </div>
+    <div class="layout-card" data-layout="wide" onclick="selectLayout('wide')">
+      <div class="layout-label">Wide</div>
+      <svg viewBox="0 0 50 30" class="layout-svg">
+        <rect x="1" y="1" width="29" height="19" rx="1" class="big-zone"/>
+        <rect x="31" y="1" width="9" height="9" rx="1"/>
+        <rect x="41" y="1" width="8" height="9" rx="1"/>
+        <rect x="31" y="11" width="9" height="9" rx="1"/>
+        <rect x="41" y="11" width="8" height="9" rx="1"/>
+        <rect x="1" y="21" width="9" height="8" rx="1"/>
+        <rect x="11" y="21" width="9" height="8" rx="1"/>
+        <rect x="21" y="21" width="9" height="8" rx="1"/>
+        <rect x="31" y="21" width="9" height="8" rx="1"/>
+        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
+      </svg>
+      <div class="layout-count">9 terminals</div>
+    </div>
+    <div class="layout-card" data-layout="half" onclick="selectLayout('half')">
+      <div class="layout-label">Half</div>
+      <svg viewBox="0 0 50 30" class="layout-svg">
+        <rect x="1" y="1" width="19" height="28" rx="1" class="big-zone"/>
+        <rect x="21" y="1" width="9" height="9" rx="1"/>
+        <rect x="31" y="1" width="9" height="9" rx="1"/>
+        <rect x="41" y="1" width="8" height="9" rx="1"/>
+        <rect x="21" y="11" width="9" height="9" rx="1"/>
+        <rect x="31" y="11" width="9" height="9" rx="1"/>
+        <rect x="41" y="11" width="8" height="9" rx="1"/>
+        <rect x="21" y="21" width="9" height="8" rx="1"/>
+        <rect x="31" y="21" width="9" height="8" rx="1"/>
+        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
+      </svg>
+      <div class="layout-count">6 terminals</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Behavior</h2>
+  <div class="row">
+    <div>
+      <label>Hold Threshold</label>
+      <div class="sublabel">Seconds before hold triggers MIC</div>
+    </div>
+    <input type="number" id="hold_threshold" min="0.1" max="3" step="0.1" value="0.5">
+  </div>
+  <div class="row">
+    <div>
+      <label>Poll Interval</label>
+      <div class="sublabel">Seconds between status checks</div>
+    </div>
+    <input type="number" id="poll_interval" min="0.05" max="2" step="0.05" value="0.2">
+  </div>
+  <div class="row">
+    <div>
+      <label>Snap to Grid</label>
+      <div class="sublabel">Auto-snap dragged windows</div>
+    </div>
+    <div class="toggle">
+      <input type="checkbox" id="snap_enabled" checked>
+      <div class="slider"></div>
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Idle Timeout</label>
+      <div class="sublabel">Seconds before status resets to black</div>
+    </div>
+    <select id="idle_timeout">
+      <option value="300">5 min</option>
+      <option value="600">10 min</option>
+      <option value="900">15 min</option>
+      <option value="1800">30 min</option>
+      <option value="3600" selected>1 hour</option>
+      <option value="7200">2 hours</option>
+      <option value="10800">3 hours</option>
+      <option value="14400">4 hours</option>
+      <option value="0">Never</option>
+    </select>
+  </div>
+</div>
+
+<div class="section">
+  <h2>MIC Key</h2>
+  <div class="row">
+    <div>
+      <label>Action</label>
+      <div class="sublabel">What happens on hold / MIC button</div>
+    </div>
+    <span class="mic-display" id="micDisplay">fn</span>
+  </div>
+  <div class="row">
+    <div>
+      <label>Set MIC command</label>
+      <div class="sublabel">"fn" for Whisprflow, or a shell command</div>
+    </div>
+    <input type="text" id="mic_command" value="fn" style="width:140px">
+  </div>
+</div>
+
+<div class="section">
+  <h2>Colors</h2>
+  <div class="color-group">
+    <div class="color-group-label">Active Window</div>
+    <div class="color-row">
+      <div class="color-item">
+        <input type="color" id="color_active" value="#ffb000">
+        <span>Active</span>
+      </div>
+    </div>
+  </div>
+  <div class="color-group">
+    <div class="color-group-label">Status States</div>
+    <div class="color-row">
+      <div class="color-item">
+        <input type="color" id="color_idle" value="#1e64dc">
+        <span>Idle</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_working" value="#1ea046">
+        <span>Working</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_permission" value="#c83232">
+        <span>Permission</span>
+      </div>
+    </div>
+  </div>
+  <div class="color-group">
+    <div class="color-group-label">Nav — Number Keys</div>
+    <div class="color-row">
+      <div class="color-item">
+        <input type="color" id="color_num_1" value="#b42828">
+        <span>1</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_num_2" value="#c87814">
+        <span>2</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_num_3" value="#beaf14">
+        <span>3</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_num_4" value="#28963c">
+        <span>4</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_num_5" value="#2850c8">
+        <span>5</span>
+      </div>
+    </div>
+  </div>
+  <div class="color-group">
+    <div class="color-group-label">Nav — Controls</div>
+    <div class="color-row">
+      <div class="color-item">
+        <input type="color" id="color_arrows" value="#1e2337">
+        <span>Arrows</span>
+      </div>
+      <div class="color-item">
+        <input type="color" id="color_mic_enter" value="#e6e6e6">
+        <span>MIC / Enter</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Hooks</h2>
+  <div class="row">
+    <div>
+      <label>Claude Code Hooks</label>
+      <div class="sublabel">Install/update hook scripts</div>
+    </div>
+    <button class="btn btn-secondary" onclick="installHooks()">Install Hooks</button>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+  <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  async function loadSettings() {
+    try {
+      const res = await fetch('/api/settings');
+      const s = await res.json();
+      document.getElementById('brightness').value = s.brightness || 80;
+      document.getElementById('brightnessVal').textContent = s.brightness || 80;
+      selectLayout(s.layout || 'default', false);
+      document.getElementById('hold_threshold').value = s.hold_threshold || 0.5;
+      document.getElementById('poll_interval').value = s.poll_interval || 0.2;
+      document.getElementById('snap_enabled').checked = s.snap_enabled !== false;
+      document.getElementById('idle_timeout').value = String(s.idle_timeout != null ? s.idle_timeout : 3600);
+
+      // Colors
+      const c = s.colors || {};
+      const colorFields = ['active','idle','working','permission','num_1','num_2','num_3','num_4','num_5','arrows','mic_enter'];
+      colorFields.forEach(k => {
+        const el = document.getElementById('color_' + k);
+        if (el && c[k]) el.value = c[k];
+      });
+
+      const mic = s.mic_command || 'fn';
+      if (typeof mic === 'object' && mic.label) {
+        document.getElementById('micDisplay').textContent = mic.label;
+        document.getElementById('mic_command').value = '(learned keystroke)';
+      } else {
+        document.getElementById('micDisplay').textContent = mic;
+        document.getElementById('mic_command').value = mic;
+      }
+    } catch (e) {
+      showToast('Failed to load settings');
+    }
+  }
+
+  async function saveSettings() {
+    const config = {
+      layout: document.getElementById('layout').value,
+      brightness: parseInt(document.getElementById('brightness').value),
+      hold_threshold: parseFloat(document.getElementById('hold_threshold').value),
+      poll_interval: parseFloat(document.getElementById('poll_interval').value),
+      snap_enabled: document.getElementById('snap_enabled').checked,
+      idle_timeout: parseInt(document.getElementById('idle_timeout').value),
+    };
+
+    // Colors
+    const colorFields = ['active','idle','working','permission','num_1','num_2','num_3','num_4','num_5','arrows','mic_enter'];
+    config.colors = {};
+    colorFields.forEach(k => {
+      const el = document.getElementById('color_' + k);
+      if (el) config.colors[k] = el.value;
+    });
+
+    const micVal = document.getElementById('mic_command').value;
+    if (micVal && micVal !== '(learned keystroke)') {
+      config.mic_command = micVal;
+    }
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(config),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        showToast('Settings saved');
+      } else {
+        showToast('Error: ' + result.error);
+      }
+    } catch (e) {
+      showToast('Failed to save settings');
+    }
+  }
+
+  async function installHooks() {
+    try {
+      const res = await fetch('/api/hooks', {method: 'POST'});
+      const result = await res.json();
+      if (result.ok) {
+        showToast('Hooks installed! Restart Claude sessions.');
+      } else {
+        showToast('Failed: ' + (result.output || 'unknown error'));
+      }
+    } catch (e) {
+      showToast('Failed to install hooks');
+    }
+  }
+
+  async function updateStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const s = await res.json();
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (s.running) {
+        dot.classList.add('active');
+        text.textContent = s.deck + ' \u2014 ' + s.terminals + ' terminal(s) mapped';
+      } else {
+        dot.classList.remove('active');
+        text.textContent = 'Not running';
+      }
+    } catch (e) {}
+  }
+
+  function selectLayout(name, save) {
+    document.getElementById('layout').value = name;
+    document.querySelectorAll('.layout-card').forEach(c => {
+      c.classList.toggle('active', c.dataset.layout === name);
+    });
+    if (save !== false) saveSettings();
+  }
+
+  // Brightness slider live update
+  document.getElementById('brightness').addEventListener('input', function() {
+    document.getElementById('brightnessVal').textContent = this.value;
+  });
+
+  // Toggle click handler
+  document.querySelector('.toggle').addEventListener('click', function() {
+    const cb = this.querySelector('input');
+    cb.checked = !cb.checked;
+  });
+
+  // Load on start
+  loadSettings();
+  updateStatus();
+  setInterval(updateStatus, 5000);
+</script>
+</body>
+</html>

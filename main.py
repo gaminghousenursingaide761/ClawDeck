@@ -132,6 +132,46 @@ ENTER_KEY_INDEX = TOTAL_KEYS - 1    # 14 (bottom-right key = Enter)
 MODE_GRID = "grid"
 MODE_NAV = "nav"
 
+# ═══════════════════════════════════════════════════════════════════════
+# LAYOUTS — each maps key index to a terminal name
+# Multiple keys with the same name merge into one window.
+# Key 14 is always ENTER.
+# ═══════════════════════════════════════════════════════════════════════
+
+LAYOUTS = {
+    "default": [
+        "T1",  "T2",  "T3",  "T4",  "T5",
+        "T6",  "T7",  "T8",  "T9",  "T10",
+        "T11", "T12", "T13", "T14", "ENTER",
+    ],
+    # Quad: T1 = 2x2 top-left (keys 0,1,5,6)
+    "quad": [
+        "T1",  "T1",  "T2",  "T3",  "T4",
+        "T1",  "T1",  "T5",  "T6",  "T7",
+        "T8",  "T9",  "T10", "T11", "ENTER",
+    ],
+    # Double Quad: T1 = 2x2 top-left, T2 = 2x2 top-middle (keys 2,3,7,8)
+    "double_quad": [
+        "T1",  "T1",  "T2",  "T2",  "T3",
+        "T1",  "T1",  "T2",  "T2",  "T4",
+        "T5",  "T6",  "T7",  "T8",  "ENTER",
+    ],
+    # Wide: T1 = 3x2 top-left (keys 0,1,2,5,6,7)
+    "wide": [
+        "T1",  "T1",  "T1",  "T2",  "T3",
+        "T1",  "T1",  "T1",  "T4",  "T5",
+        "T6",  "T7",  "T8",  "T9",  "ENTER",
+    ],
+    # Half: T1 = 2x3 left side (keys 0,1,5,6,10,11)
+    "half": [
+        "T1",  "T1",  "T2",  "T3",  "T4",
+        "T1",  "T1",  "T5",  "T6",  "T7",
+        "T1",  "T1",  "T8",  "T9",  "ENTER",
+    ],
+}
+
+LAYOUT_NAMES = list(LAYOUTS.keys())
+
 # Nav mode layout: key_index -> (action_type, value)
 NAV_KEYMAP = {
     0:  ("num",   "1"),
@@ -212,12 +252,34 @@ def _format_keystroke(key_code, flags):
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
+def _rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+def _hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
 CONFIG_DEFAULTS = {
     "brightness": BRIGHTNESS,
     "hold_threshold": HOLD_THRESHOLD_SEC,
     "poll_interval": POLL_INTERVAL,
     "snap_enabled": True,
     "mic_command": "fn",   # "fn" = double fn press, anything else = shell command
+    "idle_timeout": STATUS_STALE_SEC,  # seconds before idle/working status resets to black
+    "layout": "default",
+    "colors": {
+        "active":     _rgb_to_hex(COLOR_BG_ACTIVE),
+        "idle":       _rgb_to_hex(COLOR_BG_IDLE),
+        "working":    _rgb_to_hex(COLOR_BG_WORKING),
+        "permission": _rgb_to_hex(COLOR_BG_PERMISSION),
+        "num_1":      _rgb_to_hex(COLOR_BG_NUM_1),
+        "num_2":      _rgb_to_hex(COLOR_BG_NUM_2),
+        "num_3":      _rgb_to_hex(COLOR_BG_NUM_3),
+        "num_4":      _rgb_to_hex(COLOR_BG_NUM_4),
+        "num_5":      _rgb_to_hex(COLOR_BG_NUM_5),
+        "arrows":     _rgb_to_hex(COLOR_BG_NAV_ARROW),
+        "mic_enter":  _rgb_to_hex(COLOR_BG_NAV_ACTION),
+    },
 }
 
 
@@ -244,11 +306,18 @@ class DeckController:
     # ─── Config ───────────────────────────────────────────────────────
 
     def _load_config(self):
-        """Load config from config.json, filling in defaults for missing keys."""
+        """Load config from config.json, filling in defaults for missing keys.
+        Merges nested dicts (like colors) so new defaults get picked up."""
         config = dict(CONFIG_DEFAULTS)
+        # Deep copy default colors
+        config["colors"] = dict(CONFIG_DEFAULTS.get("colors", {}))
         try:
             with open(CONFIG_FILE) as f:
                 saved = json.load(f)
+            # Merge colors: defaults first, then saved overrides
+            if "colors" in saved:
+                config["colors"].update(saved["colors"])
+                del saved["colors"]
             config.update(saved)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
@@ -264,6 +333,76 @@ class DeckController:
             os.rename(tmp, CONFIG_FILE)
         except Exception as e:
             print(f"[config] Failed to save: {e}")
+
+    def _color(self, key, fallback):
+        """Get a color from config, falling back to the constant."""
+        colors = self.config.get("colors", {})
+        h = colors.get(key)
+        if h:
+            try:
+                return _hex_to_rgb(h)
+            except (ValueError, IndexError):
+                pass
+        return fallback
+
+    # ─── Layout ──────────────────────────────────────────────────────
+
+    def _get_layout(self):
+        """Get the current layout mapping (list of 15 terminal names)."""
+        name = self.config.get("layout", "default")
+        return LAYOUTS.get(name, LAYOUTS["default"])
+
+    def _get_terminal_names(self):
+        """Get unique terminal names in the current layout (excluding ENTER), in order."""
+        seen = set()
+        names = []
+        for name in self._get_layout():
+            if name != "ENTER" and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return names
+
+    def _get_terminal_slots(self):
+        """Map each terminal name to its list of key indices."""
+        layout = self._get_layout()
+        groups = {}
+        for i, name in enumerate(layout):
+            if name == "ENTER":
+                continue
+            groups.setdefault(name, []).append(i)
+        return groups
+
+    def _get_terminal_rect(self, terminal_name):
+        """Get the screen rectangle for a terminal (merged from all its slots)."""
+        layout = self._get_layout()
+        slots = [i for i, name in enumerate(layout) if name == terminal_name]
+        if not slots:
+            return None
+        # Find bounding box of all slots
+        rects = [self._grid_rect(s) for s in slots]
+        x = min(r["x"] for r in rects)
+        y = min(r["y"] for r in rects)
+        x2 = max(r["x"] + r["w"] for r in rects)
+        y2 = max(r["y"] + r["h"] for r in rects)
+        return {"x": x, "y": y, "w": x2 - x, "h": y2 - y,
+                "cx": (x + x2) // 2, "cy": (y + y2) // 2}
+
+    def _key_to_terminal(self, key):
+        """Get the terminal name for a key index."""
+        layout = self._get_layout()
+        if 0 <= key < len(layout):
+            name = layout[key]
+            return name if name != "ENTER" else None
+        return None
+
+    def _terminal_to_active_slot(self, terminal_name):
+        """Get the 'primary' key index for a terminal (first key in its group).
+        Used as the active_slot identifier."""
+        layout = self._get_layout()
+        for i, name in enumerate(layout):
+            if name == terminal_name:
+                return i
+        return None
 
     # ─── Setup ───────────────────────────────────────────────────────
 
@@ -430,9 +569,9 @@ class DeckController:
     # ─── Claude Status (Hook Integration) ───────────────────────────
 
     def _build_tty_map(self):
-        """Map each grid slot to its terminal window's TTY.
+        """Map each terminal's primary slot to its TTY.
         Uses AppleScript to get the TTY for each window (per app), then
-        matches window positions to grid slots."""
+        matches window positions to layout terminal zones."""
         tty_map = {}
 
         # Get TTY + bounds for each window, grouped by app
@@ -441,15 +580,16 @@ class DeckController:
             if not window_ttys:
                 continue
 
-            # Match each window to a grid slot by position
+            # Match each window to a terminal zone by position
             for info in window_ttys:
                 win_cx = info["x"] + info["w"] / 2
                 win_cy = info["y"] + info["h"] / 2
-                for slot in range(GRID_SLOTS):
-                    r = self._grid_rect(slot)
+                for name in self._get_terminal_names():
+                    r = self._get_terminal_rect(name)
                     if (r["x"] <= win_cx <= r["x"] + r["w"]
                             and r["y"] <= win_cy <= r["y"] + r["h"]):
-                        tty_map[slot] = info["tty"]
+                        primary = self._terminal_to_active_slot(name)
+                        tty_map[primary] = info["tty"]
                         break
 
         self.slot_tty = tty_map
@@ -562,7 +702,8 @@ return output
 
                 # Permission (red) never expires — stays until a new state arrives.
                 # Other states expire after STATUS_STALE_SEC (1 hour).
-                if state not in ("permission", "pending") and age > STATUS_STALE_SEC:
+                idle_timeout = self.config.get("idle_timeout", STATUS_STALE_SEC)
+                if idle_timeout and state not in ("permission", "pending") and age > idle_timeout:
                     continue
 
                 # Infer permission: "pending" (PreToolUse) with no PostToolUse
@@ -638,10 +779,13 @@ return output
         """Write active window position to the overlay file (atomic)."""
         overlay_path = Path(OVERLAY_FILE)
         if self.active_slot is not None:
-            rect = self._grid_rect(self.active_slot)
+            terminal_name = self._key_to_terminal(self.active_slot)
+            rect = self._get_terminal_rect(terminal_name) if terminal_name else self._grid_rect(self.active_slot)
+            active_color = self._color("active", COLOR_BG_ACTIVE)
             data = {"visible": True,
                     "x": rect["x"], "y": rect["y"],
-                    "w": rect["w"], "h": rect["h"]}
+                    "w": rect["w"], "h": rect["h"],
+                    "color": list(active_color)}
         else:
             data = {"visible": False}
 
@@ -707,9 +851,9 @@ return output
         return None
 
     def tile_windows(self):
-        """Arrange all terminal windows into the 5x3 grid.
+        """Arrange terminal windows according to the current layout.
         The controller's own terminal is always placed in slot 14 (bottom-right).
-        Remaining windows are matched to slots 0-13 by proximity."""
+        Remaining windows are matched to layout terminals by proximity."""
         term_wins = self._get_terminal_windows()
         if not term_wins:
             print("[tile] No terminal windows found.")
@@ -723,55 +867,54 @@ return output
                 continue
             other_wins.append(win)
 
-        # Place controller window in slot 14 (bottom-right)
+        # Place controller window in slot 14 (bottom-right, always single cell)
         if controller_win:
             print(f"[tile] Controller terminal → slot 14")
-            self._move_window_to_slot(controller_win, GRID_SLOTS - 1)
+            self._move_window_to_rect(controller_win, self._grid_rect(GRID_SLOTS - 1))
 
-        count = min(len(other_wins), DECK_TERMINAL_SLOTS)
-        print(f"[tile] Found {len(term_wins)} terminal window(s), tiling {count} into slots 0-13")
+        # Get terminal zones from layout
+        terminal_names = self._get_terminal_names()
+        terminal_rects = {name: self._get_terminal_rect(name) for name in terminal_names}
 
-        # Match remaining windows to slots 0-13
-        slot_assignments = self._match_windows_to_slots(other_wins[:count])
+        count = min(len(other_wins), len(terminal_names))
+        print(f"[tile] Found {len(term_wins)} terminal window(s), tiling {count} into layout '{self.config.get('layout', 'default')}'")
 
-        for slot, win in sorted(slot_assignments.items()):
-            self._move_window_to_slot(win, slot)
+        # Match windows to terminal zones by proximity
+        assignments = self._match_windows_to_terminals(other_wins[:count], terminal_names, terminal_rects)
 
-    def _match_windows_to_slots(self, windows):
-        """Match windows to slots 0-13 by proximity (nearest center-to-center).
-        Slot 14 is reserved for the controller terminal.
-        Returns dict of slot -> window. Uses greedy assignment sorted by
-        distance so the closest pairs match first."""
-        # Build all (distance, slot, window) pairs
+        for name, win in sorted(assignments.items()):
+            self._move_window_to_rect(win, terminal_rects[name])
+
+    def _match_windows_to_terminals(self, windows, terminal_names, terminal_rects):
+        """Match windows to terminal zones by proximity (nearest center-to-center).
+        Returns dict of terminal_name -> window."""
         pairs = []
         for win in windows:
             win_cx = win["x"] + win["w"] / 2
             win_cy = win["y"] + win["h"] / 2
-            for slot in range(DECK_TERMINAL_SLOTS):
-                r = self._grid_rect(slot)
+            for name in terminal_names:
+                r = terminal_rects[name]
                 dx = win_cx - r["cx"]
                 dy = win_cy - r["cy"]
-                pairs.append((dx * dx + dy * dy, slot, id(win), win))
+                pairs.append((dx * dx + dy * dy, name, id(win), win))
 
-        # Greedy assign: shortest distance first
         pairs.sort()
-        used_slots = set()
+        used_names = set()
         used_wins = set()
         assignments = {}
-        for dist, slot, win_id, win in pairs:
-            if slot in used_slots or win_id in used_wins:
+        for dist, name, win_id, win in pairs:
+            if name in used_names or win_id in used_wins:
                 continue
-            assignments[slot] = win
-            used_slots.add(slot)
+            assignments[name] = win
+            used_names.add(name)
             used_wins.add(win_id)
             if len(assignments) >= len(windows):
                 break
 
         return assignments
 
-    def _move_window_to_slot(self, win, slot):
-        """Move and resize a window to fill the given grid slot."""
-        r = self._grid_rect(slot)
+    def _move_window_to_rect(self, win, r):
+        """Move and resize a window to fill the given rect."""
         script = f'''
 tell application "System Events"
     tell process "{win["owner"]}"
@@ -794,14 +937,21 @@ end tell
         subprocess.run(["osascript", "-e", script], capture_output=True)
 
     def _is_snapped(self, win):
-        """Check if a window is already snapped to a grid slot."""
-        for slot in range(GRID_SLOTS):
-            r = self._grid_rect(slot)
+        """Check if a window is already snapped to a terminal zone."""
+        for name in self._get_terminal_names():
+            r = self._get_terminal_rect(name)
             if (abs(win["x"] - r["x"]) <= 2
                     and abs(win["y"] - r["y"]) <= 2
                     and abs(win["w"] - r["w"]) <= 2
                     and abs(win["h"] - r["h"]) <= 2):
                 return True
+        # Also check the enter slot
+        r = self._grid_rect(ENTER_KEY_INDEX)
+        if (abs(win["x"] - r["x"]) <= 2
+                and abs(win["y"] - r["y"]) <= 2
+                and abs(win["w"] - r["w"]) <= 2
+                and abs(win["h"] - r["h"]) <= 2):
+            return True
         return False
 
     def _check_snap_to_grid(self):
@@ -850,10 +1000,11 @@ end tell
                     if cand["polls_stable"] >= SNAP_SETTLE_POLLS:
                         # Window has settled — snap if not already in a slot
                         if not self._is_snapped(win):
-                            best_slot = self._find_nearest_empty_slot(win)
-                            if best_slot is not None:
-                                print(f"[snap] Snapping window to slot {best_slot}")
-                                self._move_window_to_slot(win, best_slot)
+                            best_terminal = self._find_nearest_empty_terminal(win)
+                            if best_terminal is not None:
+                                r = self._get_terminal_rect(best_terminal)
+                                print(f"[snap] Snapping window to {best_terminal}")
+                                self._move_window_to_rect(win, r)
                                 snapped_any = True
                         del self._snap_candidates[wid]
                 else:
@@ -882,44 +1033,54 @@ end tell
 
         return snapped_any
 
-    def _find_nearest_empty_slot(self, win):
-        """Find the grid slot closest to the window's center that doesn't
+    def _find_nearest_empty_terminal(self, win):
+        """Find the terminal zone closest to the window's center that doesn't
         already have a properly-snapped window in it."""
         win_cx = win["x"] + win["w"] / 2
         win_cy = win["y"] + win["h"] / 2
 
-        # Find which slots are occupied by snapped windows
+        # Find which terminals are occupied by snapped windows
         occupied = set()
         for tw in self._get_terminal_windows():
             if tw["id"] == win["id"]:
                 continue
-            for slot in range(GRID_SLOTS):
-                r = self._grid_rect(slot)
+            tw_cx = tw["x"] + tw["w"] / 2
+            tw_cy = tw["y"] + tw["h"] / 2
+            for name in self._get_terminal_names():
+                r = self._get_terminal_rect(name)
                 if (abs(tw["x"] - r["x"]) <= 5
                         and abs(tw["y"] - r["y"]) <= 5
                         and abs(tw["w"] - r["w"]) <= 5
                         and abs(tw["h"] - r["h"]) <= 5):
-                    occupied.add(slot)
+                    occupied.add(name)
                     break
 
-        best_slot = None
+        best_name = None
         best_dist = float("inf")
-        for slot in range(GRID_SLOTS):
-            if slot in occupied:
+        for name in self._get_terminal_names():
+            if name in occupied:
                 continue
-            r = self._grid_rect(slot)
+            r = self._get_terminal_rect(name)
             dx = win_cx - r["cx"]
             dy = win_cy - r["cy"]
             dist = dx * dx + dy * dy
             if dist < best_dist:
                 best_dist = dist
-                best_slot = slot
+                best_name = name
 
-        return best_slot
+        return best_name
 
     def _activate_slot(self, slot):
-        """Focus the terminal window at the given grid slot (any app)."""
-        rect = self._grid_rect(slot)
+        """Focus the terminal window at the given grid slot (any app).
+        For merged layouts, resolves to the terminal's primary slot."""
+        terminal_name = self._key_to_terminal(slot)
+        if terminal_name:
+            # Use the terminal's merged rect for activation
+            rect = self._get_terminal_rect(terminal_name)
+            # Set active_slot to the primary key for this terminal
+            slot = self._terminal_to_active_slot(terminal_name)
+        else:
+            rect = self._grid_rect(slot)
         cx, cy = rect["cx"], rect["cy"]
         # Find which terminal window is at this slot via Quartz
         term_wins = self._get_terminal_windows()
@@ -982,11 +1143,12 @@ end tell
                 continue
             win_cx = bounds.get("X", 0) + bw / 2
             win_cy = bounds.get("Y", 0) + bh / 2
-            for slot in range(GRID_SLOTS):
-                r = self._grid_rect(slot)
+            # Match against terminal zones (handles merged slots)
+            for name in self._get_terminal_names():
+                r = self._get_terminal_rect(name)
                 if (r["x"] <= win_cx <= r["x"] + r["w"]
                         and r["y"] <= win_cy <= r["y"] + r["h"]):
-                    return slot
+                    return self._terminal_to_active_slot(name)
             return None  # frontmost terminal found but not in any grid slot
         return None  # no terminal window is frontmost
 
@@ -1152,32 +1314,41 @@ end tell
 
     def _get_slot_style(self, slot):
         """Determine bg, fg, and border for a grid slot.
+        For merged layouts, all keys in the same terminal share state.
         Status color is always the fill. Active window gets an amber border."""
-        is_active = (slot == self.active_slot)
-        status = self.slot_status.get(slot)
-        border = COLOR_BG_ACTIVE if is_active else None
+        # Resolve to primary slot for merged terminals
+        terminal_name = self._key_to_terminal(slot)
+        primary = self._terminal_to_active_slot(terminal_name) if terminal_name else slot
+        is_active = (primary == self.active_slot)
+        status = self.slot_status.get(primary)
+        active_color = self._color("active", COLOR_BG_ACTIVE)
+        border = active_color if is_active else None
 
         if status == "idle":
-            return COLOR_BG_IDLE, COLOR_FG_IDLE, border
+            return self._color("idle", COLOR_BG_IDLE), COLOR_FG_IDLE, border
         elif status == "working":
-            return COLOR_BG_WORKING, COLOR_FG_WORKING, border
+            return self._color("working", COLOR_BG_WORKING), COLOR_FG_WORKING, border
         elif status == "permission":
+            perm_color = self._color("permission", COLOR_BG_PERMISSION)
             if self.blink_on:
-                return COLOR_BG_PERMISSION, COLOR_FG_PERMISSION, border
+                return perm_color, COLOR_FG_PERMISSION, border
             else:
-                # Blink off phase: dim red so the button visibly pulses
-                return (60, 15, 15), (100, 100, 100), border
+                # Blink off phase: dim version of permission color
+                dim = tuple(max(c // 4, 10) for c in perm_color)
+                return dim, (100, 100, 100), border
 
         # No Claude status — use amber fill for active, black for inactive
         if is_active:
-            return COLOR_BG_ACTIVE, COLOR_FG_ACTIVE, None
+            return active_color, COLOR_FG_ACTIVE, None
         return COLOR_BG_DEFAULT, COLOR_FG_DEFAULT, None
 
     def _draw_grid_mode(self):
+        layout = self._get_layout()
         for i in range(DECK_TERMINAL_SLOTS):
+            label = layout[i] if i < len(layout) else f"T{i+1}"
             bg, fg, border = self._get_slot_style(i)
             self.deck.set_key_image(
-                i, self._render_button(f"T{i+1}", bg, fg, border_color=border)
+                i, self._render_button(label, bg, fg, border_color=border)
             )
         # Enter key (always present)
         self.deck.set_key_image(
@@ -1185,13 +1356,28 @@ end tell
             self._render_button("⏎", COLOR_BG_ENTER, COLOR_FG_ENTER),
         )
 
+    def _get_nav_style(self, key):
+        """Get nav button style with config color overrides."""
+        style = NAV_BUTTON_STYLES.get(key)
+        if style is None:
+            return None
+        # Override colors from config
+        label = style["label"]
+        bg = style["bg"]
+        fg = style["fg"]
+        if key in (0, 1, 2, 3, 4):  # number keys
+            bg = self._color(f"num_{key+1}", bg)
+        elif key in (7, 11, 12, 13):  # arrows
+            bg = self._color("arrows", bg)
+        elif key in (10, 14):  # MIC, Enter
+            bg = self._color("mic_enter", bg)
+        return {"label": label, "bg": bg, "fg": fg}
+
     def _draw_nav_mode(self):
         for i in range(TOTAL_KEYS):
-            # Amber border stays on the same physical key as the active window
-            border = COLOR_BG_ACTIVE if i == self.active_slot else None
-
-            if i in NAV_BUTTON_STYLES:
-                style = NAV_BUTTON_STYLES[i]
+            border = self._color("active", COLOR_BG_ACTIVE) if i == self.active_slot else None
+            style = self._get_nav_style(i)
+            if style:
                 self.deck.set_key_image(
                     i, self._render_button(
                         style["label"], style["bg"], style["fg"],
@@ -1223,6 +1409,10 @@ end tell
             if key >= DECK_TERMINAL_SLOTS:
                 return
 
+            # Resolve merged keys to primary slot
+            terminal_name = self._key_to_terminal(key)
+            primary = self._terminal_to_active_slot(terminal_name) if terminal_name else key
+
             if pressed:
                 self._key_press_time[key] = time.time()
             else:
@@ -1232,13 +1422,13 @@ end tell
                 held = time.time() - press_time
                 if held >= self.config["hold_threshold"]:
                     # Long press → activate window + Whisprflow
-                    if key != self.active_slot:
+                    if primary != self.active_slot:
                         self._activate_slot(key)
                         self._update_all_buttons()
                     self._trigger_mic()
                 else:
                     # Short tap → normal grid behavior
-                    self._handle_grid_key(key)
+                    self._handle_grid_key(primary)
         else:
             if pressed:
                 self._handle_nav_key(key)
@@ -1345,7 +1535,8 @@ end tell
             print("  snap <on|off>         Toggle snap-to-grid")
             print("  mic <fn|command>      Set MIC key action (fn = Whisprflow, or shell command)")
             print("  mic learn             Press a key to capture it as the MIC action")
-            print("  settings              Show current settings")
+            print(f"  layout <name>         Set layout ({', '.join(LAYOUT_NAMES)})")
+            print("  settings              Open settings in browser")
             print("  quit                  Exit")
 
         elif cmd == "tile":
@@ -1432,10 +1623,34 @@ end tell
             self._save_config()
             print(f"  mic → {arg}")
 
+        elif cmd == "layout":
+            if arg is None:
+                print(f"  layout = {self.config.get('layout', 'default')}")
+                print(f"  available: {', '.join(LAYOUT_NAMES)}")
+                return
+            name = arg.lower().strip()
+            if name not in LAYOUTS:
+                print(f"  Unknown layout: {name}")
+                print(f"  available: {', '.join(LAYOUT_NAMES)}")
+                return
+            self.config["layout"] = name
+            self._save_config()
+            print(f"  layout → {name}")
+            self.tile_windows()
+            time.sleep(0.3)
+            self._build_tty_map()
+            self._update_overlay()
+            self._update_all_buttons()
+
         elif cmd == "settings":
-            print("━━━ Settings ━━━")
-            for k, v in self.config.items():
-                print(f"  {k} = {v}")
+            if hasattr(self, '_settings_port') and self._settings_port:
+                import webbrowser
+                webbrowser.open(f"http://127.0.0.1:{self._settings_port}/")
+                print(f"  Opened settings in browser")
+            else:
+                print("━━━ Settings ━━━")
+                for k, v in self.config.items():
+                    print(f"  {k} = {v}")
 
         elif cmd in ("quit", "exit", "q"):
             raise SystemExit
@@ -1511,6 +1726,10 @@ end tell
         print("Starting screen overlay...")
         self._start_overlay()
 
+        # Start settings server
+        self._settings_port = None
+        settings_port = self._start_settings_server()
+
         # Start background poller for active window sync
         self.running = True
         poller = threading.Thread(target=self._poll_active_loop, daemon=True)
@@ -1519,6 +1738,8 @@ end tell
         print()
         print("━━━ Stream Deck Controller Running ━━━")
         print("  Type 'help' for commands")
+        if settings_port:
+            print(f"  Settings UI: http://127.0.0.1:{settings_port}")
         print()
 
         try:
@@ -1534,6 +1755,106 @@ end tell
             self.deck.reset()
             self.deck.close()
             print("Done.")
+
+    # ─── Settings HTTP Server ─────────────────────────────────────────
+
+    def _start_settings_server(self):
+        """Start a local HTTP server for the browser-based settings UI.
+        Returns the port number, or None if it couldn't start."""
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        from urllib.parse import urlparse
+
+        controller_ref = self
+        settings_html_path = os.path.join(SCRIPT_DIR, "settings.html")
+
+        class SettingsHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                pass
+
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if path in ("/", "/settings"):
+                    with open(settings_html_path, "rb") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(content)
+                elif path == "/api/settings":
+                    self._json_response(controller_ref.config)
+                elif path == "/api/status":
+                    if controller_ref.running and controller_ref.deck:
+                        self._json_response({
+                            "running": True,
+                            "deck": controller_ref.deck.deck_type(),
+                            "terminals": len(controller_ref.slot_tty),
+                        })
+                    else:
+                        self._json_response({"running": False})
+                else:
+                    self.send_error(404)
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len) if content_len else b""
+                if path == "/api/settings":
+                    try:
+                        new_config = json.loads(body)
+                    except json.JSONDecodeError:
+                        self._json_response({"ok": False, "error": "Invalid JSON"}, 400)
+                        return
+                    try:
+                        tmp = CONFIG_FILE + ".tmp"
+                        with open(tmp, "w") as f:
+                            json.dump(new_config, f, indent=2)
+                            f.write("\n")
+                        os.rename(tmp, CONFIG_FILE)
+                    except Exception as e:
+                        self._json_response({"ok": False, "error": str(e)}, 500)
+                        return
+                    old_layout = controller_ref.config.get("layout")
+                    controller_ref.config.update(new_config)
+                    if controller_ref.deck and controller_ref.running:
+                        try:
+                            controller_ref.deck.set_brightness(new_config.get("brightness", 80))
+                        except Exception:
+                            pass
+                        # Re-tile if layout changed
+                        if new_config.get("layout") != old_layout:
+                            controller_ref.tile_windows()
+                            time.sleep(0.3)
+                            controller_ref._build_tty_map()
+                        controller_ref._update_overlay()
+                        controller_ref._update_all_buttons()
+                    self._json_response({"ok": True})
+                elif path == "/api/hooks":
+                    result = subprocess.run(
+                        [sys.executable, os.path.join(SCRIPT_DIR, "install_hooks.py")],
+                        input="y\n", capture_output=True, text=True, timeout=10,
+                    )
+                    output = (result.stdout + result.stderr).strip()
+                    self._json_response({"ok": result.returncode == 0, "output": output})
+                else:
+                    self.send_error(404)
+
+            def _json_response(self, data, code=200):
+                body = json.dumps(data).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        for port in range(19830, 19850):
+            try:
+                server = HTTPServer(("127.0.0.1", port), SettingsHandler)
+                threading.Thread(target=server.serve_forever, daemon=True).start()
+                self._settings_port = port
+                return port
+            except OSError:
+                continue
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1551,7 +1872,7 @@ if __name__ == "__main__":
         print("  snap <on|off>         Toggle snap-to-grid")
         print("  mic <fn|command>      Set MIC key action")
         print("  mic learn             Capture a keystroke for MIC key")
-        print("  settings              Show current settings")
+        print("  settings              Open settings in browser")
         print("  help                  Show all commands")
         print("  quit                  Exit")
         sys.exit(0)

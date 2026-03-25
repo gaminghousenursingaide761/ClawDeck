@@ -6,13 +6,15 @@ Built for the **Stream Deck Original** (15-key, 5x3 grid) on **macOS**.
 
 ## What It Does
 
-- Tiles up to 14 terminal windows into a 5x3 screen grid
+- Tiles terminal windows into a 5x3 screen grid with multiple layout options
 - Each Stream Deck button reflects Claude Code's live state via hooks
 - Tap a button to activate that terminal window
 - Hold a button to trigger Whisprflow / dictation
 - Nav Mode for arrow keys and number selection (Claude multi-choice prompts)
-- Amber screen border highlights the active window
+- Screen border overlay highlights the active window
 - Snap-to-grid: drag a terminal and it auto-snaps to the nearest slot
+- Browser-based settings UI for colors, layouts, and behavior
+- All colors fully customizable
 
 ### Button Colors
 
@@ -24,14 +26,44 @@ Built for the **Stream Deck Original** (15-key, 5x3 grid) on **macOS**.
 | Red (blinking) | Permission needed |
 | Amber border | Active window |
 
+All colors are customizable via the settings UI.
+
+### Layouts
+
+Choose a window layout from settings or the `layout` command:
+
+```
+Default (14 terminals)          Quad (11 terminals)
+┌────┬────┬────┬────┬────┐     ┌─────────┬────┬────┬────┐
+│ T1 │ T2 │ T3 │ T4 │ T5 │     │         │ T2 │ T3 │ T4 │
+├────┼────┼────┼────┼────┤     │   T1    ├────┼────┼────┤
+│ T6 │ T7 │ T8 │ T9 │T10│     │         │ T5 │ T6 │ T7 │
+├────┼────┼────┼────┼────┤     ├────┼────┼────┼────┼────┤
+│T11 │T12 │T13 │T14 │ ⏎  │     │ T8 │ T9 │T10 │T11 │ ⏎  │
+└────┴────┴────┴────┴────┘     └────┴────┴────┴────┴────┘
+
+Double Quad (8 terminals)       Wide (9 terminals)
+┌─────────┬─────────┬────┐     ┌──────────────┬────┬────┐
+│         │         │ T3 │     │              │ T2 │ T3 │
+│   T1    │   T2    ├────┤     │     T1       ├────┼────┤
+│         │         │ T4 │     │              │ T4 │ T5 │
+├────┼────┼────┼────┼────┤     ├────┼────┼────┼────┼────┤
+│ T5 │ T6 │ T7 │ T8 │ ⏎  │     │ T6 │ T7 │ T8 │ T9 │ ⏎  │
+└────┴────┴────┴────┴────┘     └────┴────┴────┴────┴────┘
+
+Half (6 terminals)
+┌─────────┬────┬────┬────┐
+│         │ T2 │ T3 │ T4 │
+│         ├────┼────┼────┤
+│   T1    │ T5 │ T6 │ T7 │
+│         ├────┼────┼────┤
+│         │ T8 │ T9 │ ⏎  │
+└─────────┴────┴────┴────┘
+```
+
 ### Modes
 
 **Grid Mode** (default):
-```
- T1   T2   T3   T4   T5
- T6   T7   T8   T9   T10
- T11  T12  T13  T14   ⏎
-```
 - Tap → activate window
 - Tap active window → enter Nav Mode
 - Hold any button → activate + trigger MIC (Whisprflow)
@@ -73,9 +105,22 @@ On first run, you'll be prompted to grant **Accessibility** permissions to your 
 ## Run
 
 ```bash
-cd clawdeck
+cd ClawDeck
 .venv/bin/python main.py
 ```
+
+This starts the controller with a terminal REPL and a browser-based settings UI.
+
+## Settings UI
+
+A settings page is available at `http://127.0.0.1:19830` while the controller is running. Type `settings` in the REPL to open it. From here you can configure:
+
+- **Layout** — visual grid selector for all 5 layouts
+- **Brightness** — Stream Deck brightness slider
+- **Colors** — pick custom colors for status states, nav keys, and active window
+- **Behavior** — hold threshold, poll interval, snap-to-grid, idle timeout
+- **MIC key** — Whisprflow (fn) or custom shell command
+- **Hooks** — one-click Claude Code hook installation
 
 ## Runtime Commands
 
@@ -84,16 +129,32 @@ Type these while the controller is running:
 | Command | Description |
 |---------|-------------|
 | `tile` | Re-arrange windows into grid |
+| `layout <name>` | Set layout (default, quad, double_quad, wide, half) |
 | `brightness <0-100>` | Set Stream Deck brightness |
 | `hold <seconds>` | Set hold threshold for MIC (default 0.5s) |
 | `poll <seconds>` | Set poll interval (default 0.2s) |
 | `snap <on\|off>` | Toggle snap-to-grid |
 | `mic <fn\|command>` | Set MIC action (`fn` = Whisprflow, or any shell command) |
 | `mic learn` | Press a key to capture it as the MIC action |
-| `settings` | Show current settings |
+| `settings` | Open settings in browser |
 | `quit` | Exit |
 
 Settings persist to `config.json` automatically.
+
+## Menu Bar App (Optional)
+
+For a standalone menu bar experience:
+
+```bash
+.venv/bin/python menubar.py
+```
+
+Or build a `.app` bundle:
+
+```bash
+.venv/bin/python setup.py py2app
+open dist/ClawDeck.app
+```
 
 ## How It Works
 
@@ -102,12 +163,13 @@ main.py (DeckController)
   ├── Stream Deck ←→ Key callbacks (press/release/hold)
   ├── Quartz API  ←→ Window discovery, frontmost detection
   ├── AppleScript ←→ Window tiling, activation, keystroke sending
+  ├── HTTP server ←→ Settings UI (settings.html)
   ├── /tmp/deck-status/*  ← Hook status files (read)
-  └── .deck-overlay.json  → Overlay position (write)
+  └── .deck-overlay.json  → Overlay position + color (write)
           │                              ▲
           ▼                              │
     overlay.py                    deck-hook.sh
-    (amber border)                (called by Claude Code hooks)
+    (screen border)               (called by Claude Code hooks)
 ```
 
 Claude Code hooks fire on state changes (tool use, permission prompts, idle) and write status files. The controller polls these every 200ms and updates button colors accordingly.
