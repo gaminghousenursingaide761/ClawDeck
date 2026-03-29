@@ -35,7 +35,7 @@ NAV MODE (tap the active terminal) — example on 5x3 Original:
 Active terminal is amber; all others are black.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 import time
 import threading
@@ -469,6 +469,7 @@ CONFIG_DEFAULTS = {
     "hold_threshold": HOLD_THRESHOLD_SEC,
     "poll_interval": POLL_INTERVAL,
     "snap_enabled": True,
+    "auto_column": False,
     "mic_command": "fn",   # "fn" = double fn press, anything else = shell command
     "idle_timeout": STATUS_STALE_SEC,  # seconds before idle/working status resets to black
     "layout": "default",
@@ -514,6 +515,8 @@ class DeckController:
         # Snap-to-grid: track window positions to detect drag-and-drop
         self._prev_win_positions = {}   # window_id -> (x, y, w, h)
         self._snap_candidates = {}     # window_id -> {pos, polls_stable, win}
+        self._auto_column_slot = None   # slot currently expanded by auto-column (or None)
+        self._last_term_wins = []    # cached terminal windows from last poll (for auto-column resize)
         self._controller_win_id = None  # Quartz window ID of the controller terminal
 
         # Grid dimensions — defaults for 5x3, overridden by _init_grid() after deck.open()
@@ -624,6 +627,67 @@ class DeckController:
         y2 = max(r["y"] + r["h"] for r in rects)
         return {"x": x, "y": y, "w": x2 - x, "h": y2 - y,
                 "cx": (x + x2) // 2, "cy": (y + y2) // 2}
+
+    def _get_column_rect(self, slot):
+        """Get a full-height screen rect spanning the column(s) of the given slot's terminal.
+        Used by auto-column to expand the active window vertically."""
+        if slot is None:
+            return None
+        terminal_name = self._key_to_terminal(slot)
+        if not terminal_name:
+            return None
+        # Find all columns this terminal occupies
+        layout = self._get_layout()
+        slots = [i for i, name in enumerate(layout) if name == terminal_name]
+        cols = set(s % self.cols for s in slots)
+        min_col = min(cols)
+        max_col = max(cols)
+        cell_w = self.screen["w"] / self.cols
+        x = int(self.screen["x"] + min_col * cell_w)
+        w = int((max_col - min_col + 1) * cell_w)
+        y = self.screen["y"]
+        h = self.screen["h"]
+        return {"x": x, "y": y, "w": w, "h": h,
+                "cx": x + w // 2, "cy": y + h // 2}
+
+    def _find_window_at_rect(self, rect):
+        """Find a terminal window matching the given rect (within tolerance).
+        Searches _last_term_wins cache."""
+        for win in self._last_term_wins:
+            if (abs(win["x"] - rect["x"]) <= 5
+                    and abs(win["y"] - rect["y"]) <= 5
+                    and abs(win["w"] - rect["w"]) <= 20
+                    and abs(win["h"] - rect["h"]) <= 20):
+                return win
+        return None
+
+    def _apply_auto_column(self, old_slot, new_slot):
+        """Expand or shrink windows for auto-column mode.
+        Called when active_slot changes."""
+        if not self.config.get("auto_column"):
+            return
+
+        # Shrink the previously expanded window back to its normal grid rect
+        if self._auto_column_slot is not None:
+            old_name = self._key_to_terminal(self._auto_column_slot)
+            if old_name:
+                expanded_rect = self._get_column_rect(self._auto_column_slot)
+                win = self._find_window_at_rect(expanded_rect)
+                if win:
+                    normal_rect = self._get_terminal_rect(old_name)
+                    self._move_window_to_rect(win, normal_rect)
+            self._auto_column_slot = None
+
+        # Expand the new active window to full column height
+        if new_slot is not None:
+            new_name = self._key_to_terminal(new_slot)
+            if new_name:
+                normal_rect = self._get_terminal_rect(new_name)
+                win = self._find_window_at_rect(normal_rect)
+                if win:
+                    col_rect = self._get_column_rect(new_slot)
+                    self._move_window_to_rect(win, col_rect)
+                    self._auto_column_slot = new_slot
 
     def _key_to_terminal(self, key):
         """Get the terminal name for a key index."""
@@ -1265,7 +1329,10 @@ end tell
         overlay_path = Path(OVERLAY_FILE)
         if self.active_slot is not None:
             terminal_name = self._key_to_terminal(self.active_slot)
-            rect = self._get_terminal_rect(terminal_name) if terminal_name else self._grid_rect(self.active_slot)
+            if self.config.get("auto_column") and self._auto_column_slot == self.active_slot:
+                rect = self._get_column_rect(self.active_slot)
+            else:
+                rect = self._get_terminal_rect(terminal_name) if terminal_name else self._grid_rect(self.active_slot)
             active_color = self._color("active", COLOR_BG_ACTIVE)
             raw_cwd = self.slot_cwd.get(self.active_slot)
             formatted_cwd = self._format_cwd(raw_cwd) if raw_cwd and self.config.get("overlay_label", True) else None
@@ -1488,6 +1555,14 @@ end tell
                      or abs(pos[2] - prev_pos[2]) > SNAP_TOLERANCE
                      or abs(pos[3] - prev_pos[3]) > SNAP_TOLERANCE)
 
+            # Auto-column: skip snap checking for the currently expanded window
+            if self.config.get("auto_column") and self._auto_column_slot is not None:
+                col_rect = self._get_column_rect(self._auto_column_slot)
+                if col_rect and (abs(pos[0] - col_rect["x"]) <= SNAP_TOLERANCE
+                        and abs(pos[1] - col_rect["y"]) <= SNAP_TOLERANCE):
+                    self._snap_candidates.pop(wid, None)
+                    continue
+
             if moved:
                 # Window is moving — reset settle counter
                 self._snap_candidates[wid] = {"pos": pos, "polls_stable": 0, "win": win}
@@ -1592,8 +1667,14 @@ end tell
         else:
             rect = self._grid_rect(slot)
         cx, cy = rect["cx"], rect["cy"]
-        # Find which terminal window is at this slot via Quartz
+        # Single Quartz query — reuse for auto-column and activation
         term_wins = self._get_terminal_windows()
+        self._last_term_wins = term_wins
+
+        # Auto-column: shrink old expanded window first
+        if self.config.get("auto_column") and self._auto_column_slot is not None:
+            self._apply_auto_column(self.active_slot, None)
+
         target_owner = None
         for w in term_wins:
             if (w["x"] <= cx <= w["x"] + w["w"]
@@ -1628,6 +1709,10 @@ end tell
 '''
         subprocess.run(["osascript", "-e", script], capture_output=True)
         self.active_slot = slot
+        # Auto-column: expand new window — re-read windows since activate changed positions
+        if self.config.get("auto_column"):
+            self._last_term_wins = self._get_terminal_windows()
+            self._apply_auto_column(None, slot)
         self._update_overlay()
 
     def _get_frontmost_slot(self):
@@ -1658,6 +1743,12 @@ end tell
                 return self.enter_key_index
             win_cx = bounds.get("X", 0) + bw / 2
             win_cy = bounds.get("Y", 0) + bh / 2
+            # Auto-column: expanded window center shifts, check column rect first
+            if self.config.get("auto_column") and self._auto_column_slot is not None:
+                col_rect = self._get_column_rect(self._auto_column_slot)
+                if col_rect and (col_rect["x"] <= win_cx <= col_rect["x"] + col_rect["w"]
+                        and col_rect["y"] <= win_cy <= col_rect["y"] + col_rect["h"]):
+                    return self._auto_column_slot
             # Match against terminal zones (handles merged slots)
             for name in self._get_terminal_names():
                 r = self._get_terminal_rect(name)
@@ -2052,10 +2143,16 @@ end tell
                         if self.config["snap_enabled"] and self._check_snap_to_grid():
                             needs_redraw = True
 
+                        # Cache terminal windows for auto-column
+                        if self.config.get("auto_column"):
+                            self._last_term_wins = self._get_terminal_windows()
+
                         # Check frontmost window
                         slot = self._get_frontmost_slot()
                         if slot != self.active_slot:
+                            old_slot = self.active_slot
                             self.active_slot = slot  # None when non-terminal is frontmost
+                            self._apply_auto_column(old_slot, slot)
                             self._update_overlay()
                             needs_redraw = True
 
@@ -2459,6 +2556,17 @@ end tell
                             controller_ref.tile_windows()
                             time.sleep(0.3)
                             controller_ref._build_tty_map()
+                        # Shrink expanded window if auto-column was turned off
+                        if not new_config.get("auto_column", False) and controller_ref._auto_column_slot is not None:
+                            old_name = controller_ref._key_to_terminal(controller_ref._auto_column_slot)
+                            if old_name:
+                                controller_ref._last_term_wins = controller_ref._get_terminal_windows()
+                                expanded_rect = controller_ref._get_column_rect(controller_ref._auto_column_slot)
+                                win = controller_ref._find_window_at_rect(expanded_rect)
+                                if win:
+                                    normal_rect = controller_ref._get_terminal_rect(old_name)
+                                    controller_ref._move_window_to_rect(win, normal_rect)
+                            controller_ref._auto_column_slot = None
                         controller_ref._update_overlay()
                         controller_ref._update_all_buttons()
                     self._json_response({"ok": True})

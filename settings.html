@@ -339,6 +339,16 @@
   </div>
   <div class="row">
     <div>
+      <label>Auto-Column</label>
+      <div class="sublabel">Expand active terminal to full column height</div>
+    </div>
+    <div class="toggle">
+      <input type="checkbox" id="auto_column">
+      <div class="slider"></div>
+    </div>
+  </div>
+  <div class="row">
+    <div>
       <label>Idle Timeout</label>
       <div class="sublabel">Seconds before status resets to black</div>
     </div>
@@ -514,6 +524,7 @@
       document.getElementById('hold_threshold').value = s.hold_threshold || 0.5;
       document.getElementById('poll_interval').value = s.poll_interval || 0.2;
       document.getElementById('snap_enabled').checked = s.snap_enabled !== false;
+      document.getElementById('auto_column').checked = s.auto_column === true;
       document.getElementById('idle_timeout').value = String(s.idle_timeout != null ? s.idle_timeout : 3600);
       document.getElementById('folder_label').value = s.folder_label || 'last';
       document.getElementById('button_labels').checked = s.button_labels !== false;
@@ -550,6 +561,7 @@
       hold_threshold: parseFloat(document.getElementById('hold_threshold').value),
       poll_interval: parseFloat(document.getElementById('poll_interval').value),
       snap_enabled: document.getElementById('snap_enabled').checked,
+      auto_column: document.getElementById('auto_column').checked,
       idle_timeout: parseInt(document.getElementById('idle_timeout').value),
       folder_label: document.getElementById('folder_label').value,
       button_labels: document.getElementById('button_labels').checked,
