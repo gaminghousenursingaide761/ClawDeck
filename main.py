@@ -2,9 +2,10 @@
 """
 ClawDeck — Stream Deck controller for Claude Code terminal sessions
 
-Maps a 5x3 (15-key) Elgato Stream Deck to terminal windows arranged in a grid.
+Maps any Elgato Stream Deck to terminal windows arranged in a grid.
+Supports: Original, MK2, Mini, XL, Neo, Plus (auto-detected at startup).
 
-GRID MODE (default):
+GRID MODE (default) — example on 5x3 Original:
   ┌─────┬─────┬─────┬─────┬─────┐
   │ T1  │ T2  │ T3  │ T4  │ T5  │
   ├─────┼─────┼─────┼─────┼─────┤
@@ -15,9 +16,9 @@ GRID MODE (default):
   - Tap a terminal button → activate that window (turns amber)
   - Tap the already-active button → enter Nav Mode
   - Hold any terminal button (>=0.5s) → activate + trigger Whisprflow (fn)
-  - Bottom-right key always sends Enter to active window
+  - Last key always sends Enter to active window
 
-NAV MODE (tap the active terminal):
+NAV MODE (tap the active terminal) — example on 5x3 Original:
   ┌─────┬─────┬─────┬─────┬─────┐
   │  1  │  2  │  3  │  4  │  5  │  ← ROYGB number keys
   ├─────┼─────┼─────┼─────┼─────┤
@@ -25,7 +26,7 @@ NAV MODE (tap the active terminal):
   ├─────┼─────┼─────┼─────┼─────┤
   │ MIC │  ←  │  ↓  │  →  │  ⏎  │
   └─────┴─────┴─────┴─────┴─────┘
-  - 1-5 keys send number keystrokes (for Claude Code multi-choice)
+  - Number keys send keystrokes (for Claude Code multi-choice)
   - Arrow cluster for navigation (slate-blue zone)
   - MIC triggers Whisprflow (fn double-press)
   - Enter sends Return (stays in Nav Mode for multi-question flows)
@@ -34,7 +35,7 @@ NAV MODE (tap the active terminal):
 Active terminal is amber; all others are black.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 import time
 import threading
@@ -154,7 +155,7 @@ COLOR_BG_NUM_5 = (40, 80, 200)          # blue
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# CONSTANTS (derived)
+# CONSTANTS (derived) — defaults for 5x3, overridden per-device at runtime
 # ═══════════════════════════════════════════════════════════════════════
 
 TOTAL_KEYS = COLS * ROWS            # 15
@@ -166,76 +167,247 @@ MODE_GRID = "grid"
 MODE_NAV = "nav"
 
 # ═══════════════════════════════════════════════════════════════════════
-# LAYOUTS — each maps key index to a terminal name
+# DEVICE PROFILES — supported Stream Deck models by grid size (cols, rows)
+# ═══════════════════════════════════════════════════════════════════════
+
+DEVICE_PROFILES = {
+    (5, 3): {"name": "Original / MK2"},
+    (3, 2): {"name": "Mini"},
+    (8, 4): {"name": "XL"},
+    (4, 2): {"name": "Neo / Plus"},
+}
+
+# ═══════════════════════════════════════════════════════════════════════
+# LAYOUTS — keyed by (cols, rows), each maps key index to a terminal name
 # Multiple keys with the same name merge into one window.
-# Key 14 is always ENTER.
+# Last key is always ENTER.
 # ═══════════════════════════════════════════════════════════════════════
 
 LAYOUTS = {
-    "default": [
-        "T1",  "T2",  "T3",  "T4",  "T5",
-        "T6",  "T7",  "T8",  "T9",  "T10",
-        "T11", "T12", "T13", "T14", "ENTER",
-    ],
-    # Quad: T1 = 2x2 top-left (keys 0,1,5,6)
-    "quad": [
-        "T1",  "T1",  "T2",  "T3",  "T4",
-        "T1",  "T1",  "T5",  "T6",  "T7",
-        "T8",  "T9",  "T10", "T11", "ENTER",
-    ],
-    # Double Quad: T1 = 2x2 top-left, T2 = 2x2 top-middle (keys 2,3,7,8)
-    "double_quad": [
-        "T1",  "T1",  "T2",  "T2",  "T3",
-        "T1",  "T1",  "T2",  "T2",  "T4",
-        "T5",  "T6",  "T7",  "T8",  "ENTER",
-    ],
-    # Wide: T1 = 3x2 top-left (keys 0,1,2,5,6,7)
-    "wide": [
-        "T1",  "T1",  "T1",  "T2",  "T3",
-        "T1",  "T1",  "T1",  "T4",  "T5",
-        "T6",  "T7",  "T8",  "T9",  "ENTER",
-    ],
-    # Half: T1 = 2x3 left side (keys 0,1,5,6,10,11)
-    "half": [
-        "T1",  "T1",  "T2",  "T3",  "T4",
-        "T1",  "T1",  "T5",  "T6",  "T7",
-        "T1",  "T1",  "T8",  "T9",  "ENTER",
-    ],
+    # ── Original / MK2 (5x3, 15 keys) ──
+    (5, 3): {
+        "default": [
+            "T1",  "T2",  "T3",  "T4",  "T5",
+            "T6",  "T7",  "T8",  "T9",  "T10",
+            "T11", "T12", "T13", "T14", "ENTER",
+        ],
+        # Quad: T1 = 2x2 top-left (keys 0,1,5,6)
+        "quad": [
+            "T1",  "T1",  "T2",  "T3",  "T4",
+            "T1",  "T1",  "T5",  "T6",  "T7",
+            "T8",  "T9",  "T10", "T11", "ENTER",
+        ],
+        # Double Quad: T1 = 2x2 top-left, T2 = 2x2 top-middle
+        "double_quad": [
+            "T1",  "T1",  "T2",  "T2",  "T3",
+            "T1",  "T1",  "T2",  "T2",  "T4",
+            "T5",  "T6",  "T7",  "T8",  "ENTER",
+        ],
+        # Wide: T1 = 3x2 top-left
+        "wide": [
+            "T1",  "T1",  "T1",  "T2",  "T3",
+            "T1",  "T1",  "T1",  "T4",  "T5",
+            "T6",  "T7",  "T8",  "T9",  "ENTER",
+        ],
+        # Half: T1 = 2x3 left side
+        "half": [
+            "T1",  "T1",  "T2",  "T3",  "T4",
+            "T1",  "T1",  "T5",  "T6",  "T7",
+            "T1",  "T1",  "T8",  "T9",  "ENTER",
+        ],
+    },
+    # ── Mini (3x2, 6 keys) ──
+    (3, 2): {
+        "default": [
+            "T1",  "T2",  "T3",
+            "T4",  "T5",  "ENTER",
+        ],
+        # Quad: T1 = 2x2 top-left + 1 small
+        "quad": [
+            "T1",  "T1",  "T2",
+            "T1",  "T1",  "ENTER",
+        ],
+    },
+    # ── XL (8x4, 32 keys) ──
+    (8, 4): {
+        "default": [
+            "T1",  "T2",  "T3",  "T4",  "T5",  "T6",  "T7",  "T8",
+            "T9",  "T10", "T11", "T12", "T13", "T14", "T15", "T16",
+            "T17", "T18", "T19", "T20", "T21", "T22", "T23", "T24",
+            "T25", "T26", "T27", "T28", "T29", "T30", "T31", "ENTER",
+        ],
+        # Quad: T1 = 2x2 top-left
+        "quad": [
+            "T1",  "T1",  "T2",  "T3",  "T4",  "T5",  "T6",  "T7",
+            "T1",  "T1",  "T8",  "T9",  "T10", "T11", "T12", "T13",
+            "T14", "T15", "T16", "T17", "T18", "T19", "T20", "T21",
+            "T22", "T23", "T24", "T25", "T26", "T27", "T28", "ENTER",
+        ],
+        # Double Quad: T1 = 2x2 top-left, T2 = 2x2 next to it
+        "double_quad": [
+            "T1",  "T1",  "T2",  "T2",  "T3",  "T4",  "T5",  "T6",
+            "T1",  "T1",  "T2",  "T2",  "T7",  "T8",  "T9",  "T10",
+            "T11", "T12", "T13", "T14", "T15", "T16", "T17", "T18",
+            "T19", "T20", "T21", "T22", "T23", "T24", "T25", "ENTER",
+        ],
+        # Wide: T1 = 4x2 top-left
+        "wide": [
+            "T1",  "T1",  "T1",  "T1",  "T2",  "T3",  "T4",  "T5",
+            "T1",  "T1",  "T1",  "T1",  "T6",  "T7",  "T8",  "T9",
+            "T10", "T11", "T12", "T13", "T14", "T15", "T16", "T17",
+            "T18", "T19", "T20", "T21", "T22", "T23", "T24", "ENTER",
+        ],
+        # Half: T1 = 2x4 left side
+        "half": [
+            "T1",  "T1",  "T2",  "T3",  "T4",  "T5",  "T6",  "T7",
+            "T1",  "T1",  "T8",  "T9",  "T10", "T11", "T12", "T13",
+            "T1",  "T1",  "T14", "T15", "T16", "T17", "T18", "T19",
+            "T1",  "T1",  "T20", "T21", "T22", "T23", "T24", "ENTER",
+        ],
+        # Triple: three 2x2 blocks across top
+        "triple": [
+            "T1",  "T1",  "T2",  "T2",  "T3",  "T3",  "T4",  "T5",
+            "T1",  "T1",  "T2",  "T2",  "T3",  "T3",  "T6",  "T7",
+            "T8",  "T9",  "T10", "T11", "T12", "T13", "T14", "T15",
+            "T16", "T17", "T18", "T19", "T20", "T21", "T22", "ENTER",
+        ],
+    },
+    # ── Neo / Plus (4x2, 8 keys) ──
+    (4, 2): {
+        "default": [
+            "T1",  "T2",  "T3",  "T4",
+            "T5",  "T6",  "T7",  "ENTER",
+        ],
+        # Quad: T1 = 2x2 top-left + 3 small
+        "quad": [
+            "T1",  "T1",  "T2",  "T3",
+            "T1",  "T1",  "T4",  "ENTER",
+        ],
+    },
 }
 
-LAYOUT_NAMES = list(LAYOUTS.keys())
+# Helper to get layout names for a grid size
+def _layout_names_for_grid(grid_key):
+    return list(LAYOUTS.get(grid_key, LAYOUTS[(5, 3)]).keys())
 
-# Nav mode layout: key_index -> (action_type, value)
-NAV_KEYMAP = {
-    0:  ("num",   "1"),
-    1:  ("num",   "2"),
-    2:  ("num",   "3"),
-    3:  ("num",   "4"),
-    4:  ("num",   "5"),
-    9:  ("back",  None),
-    7:  ("arrow", "Up"),
-    10: ("whisprflow", None),
-    11: ("arrow", "Left"),
-    12: ("arrow", "Down"),
-    13: ("arrow", "Right"),
-    14: ("enter", None),
+LAYOUT_NAMES = _layout_names_for_grid((5, 3))  # backward compat default
+
+# ═══════════════════════════════════════════════════════════════════════
+# NAV MODE — keymaps and styles per grid size
+# ═══════════════════════════════════════════════════════════════════════
+
+# Additional ROYGB colors for XL (keys 6-8)
+COLOR_BG_NUM_6 = (100, 40, 180)        # purple
+COLOR_BG_NUM_7 = (180, 40, 120)        # magenta
+COLOR_BG_NUM_8 = (40, 160, 160)        # teal
+
+NAV_KEYMAPS = {
+    # ── Original / MK2 (5x3) ──
+    (5, 3): {
+        0:  ("num",   "1"),
+        1:  ("num",   "2"),
+        2:  ("num",   "3"),
+        3:  ("num",   "4"),
+        4:  ("num",   "5"),
+        9:  ("back",  None),
+        7:  ("arrow", "Up"),
+        10: ("whisprflow", None),
+        11: ("arrow", "Left"),
+        12: ("arrow", "Down"),
+        13: ("arrow", "Right"),
+        14: ("enter", None),
+    },
+    # ── Mini (3x2) — arrows + back + enter ──
+    (3, 2): {
+        0:  ("back",  None),
+        1:  ("arrow", "Up"),
+        2:  ("enter", None),
+        3:  ("arrow", "Left"),
+        4:  ("arrow", "Down"),
+        5:  ("arrow", "Right"),
+    },
+    # ── XL (8x4) — 5 numbers, arrows, MIC, back ──
+    (8, 4): {
+        0:  ("num",   "1"),
+        1:  ("num",   "2"),
+        2:  ("num",   "3"),
+        3:  ("num",   "4"),
+        4:  ("num",   "5"),
+        7:  ("back",  None),
+        19: ("arrow", "Up"),
+        26: ("arrow", "Left"),
+        27: ("arrow", "Down"),
+        28: ("arrow", "Right"),
+        24: ("whisprflow", None),
+        31: ("enter", None),
+    },
+    # ── Neo / Plus (4x2) — arrows, MIC, back ──
+    (4, 2): {
+        0:  ("whisprflow", None),
+        1:  ("arrow", "Up"),
+        3:  ("back",  None),
+        4:  ("arrow", "Left"),
+        5:  ("arrow", "Down"),
+        6:  ("arrow", "Right"),
+        7:  ("enter", None),
+    },
 }
 
-# Nav mode button labels and styles
-NAV_BUTTON_STYLES = {
-    0:  {"label": "1",    "bg": COLOR_BG_NUM_1,      "fg": COLOR_FG_NAV_NUM},
-    1:  {"label": "2",    "bg": COLOR_BG_NUM_2,      "fg": COLOR_FG_NAV_NUM},
-    2:  {"label": "3",    "bg": COLOR_BG_NUM_3,      "fg": COLOR_FG_NAV_NUM},
-    3:  {"label": "4",    "bg": COLOR_BG_NUM_4,      "fg": COLOR_FG_NAV_NUM},
-    4:  {"label": "5",    "bg": COLOR_BG_NUM_5,      "fg": COLOR_FG_NAV_NUM},
-    9:  {"label": "BACK", "bg": COLOR_BG_NAV_BACK,   "fg": COLOR_FG_DEFAULT},
-    7:  {"label": "↑",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
-    10: {"label": "MIC",  "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
-    11: {"label": "←",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
-    12: {"label": "↓",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
-    13: {"label": "→",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
-    14: {"label": "⏎",    "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+NAV_STYLES = {
+    # ── Original / MK2 (5x3) ──
+    (5, 3): {
+        0:  {"label": "1",    "bg": COLOR_BG_NUM_1,      "fg": COLOR_FG_NAV_NUM},
+        1:  {"label": "2",    "bg": COLOR_BG_NUM_2,      "fg": COLOR_FG_NAV_NUM},
+        2:  {"label": "3",    "bg": COLOR_BG_NUM_3,      "fg": COLOR_FG_NAV_NUM},
+        3:  {"label": "4",    "bg": COLOR_BG_NUM_4,      "fg": COLOR_FG_NAV_NUM},
+        4:  {"label": "5",    "bg": COLOR_BG_NUM_5,      "fg": COLOR_FG_NAV_NUM},
+        9:  {"label": "BACK", "bg": COLOR_BG_NAV_BACK,   "fg": COLOR_FG_DEFAULT},
+        7:  {"label": "↑",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        10: {"label": "MIC",  "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+        11: {"label": "←",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        12: {"label": "↓",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        13: {"label": "→",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        14: {"label": "⏎",    "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+    },
+    # ── Mini (3x2) ──
+    (3, 2): {
+        0:  {"label": "BACK", "bg": COLOR_BG_NAV_BACK,   "fg": COLOR_FG_DEFAULT},
+        1:  {"label": "↑",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        2:  {"label": "⏎",    "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+        3:  {"label": "←",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        4:  {"label": "↓",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        5:  {"label": "→",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+    },
+    # ── XL (8x4) ──
+    (8, 4): {
+        0:  {"label": "1",    "bg": COLOR_BG_NUM_1,      "fg": COLOR_FG_NAV_NUM},
+        1:  {"label": "2",    "bg": COLOR_BG_NUM_2,      "fg": COLOR_FG_NAV_NUM},
+        2:  {"label": "3",    "bg": COLOR_BG_NUM_3,      "fg": COLOR_FG_NAV_NUM},
+        3:  {"label": "4",    "bg": COLOR_BG_NUM_4,      "fg": COLOR_FG_NAV_NUM},
+        4:  {"label": "5",    "bg": COLOR_BG_NUM_5,      "fg": COLOR_FG_NAV_NUM},
+        7:  {"label": "BACK", "bg": COLOR_BG_NAV_BACK,   "fg": COLOR_FG_DEFAULT},
+        19: {"label": "↑",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        26: {"label": "←",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        27: {"label": "↓",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        28: {"label": "→",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        24: {"label": "MIC",  "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+        31: {"label": "⏎",    "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+    },
+    # ── Neo / Plus (4x2) ──
+    (4, 2): {
+        0:  {"label": "MIC",  "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+        1:  {"label": "↑",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        3:  {"label": "BACK", "bg": COLOR_BG_NAV_BACK,   "fg": COLOR_FG_DEFAULT},
+        4:  {"label": "←",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        5:  {"label": "↓",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        6:  {"label": "→",    "bg": COLOR_BG_NAV_ARROW,  "fg": COLOR_FG_NAV_ARROW},
+        7:  {"label": "⏎",    "bg": COLOR_BG_NAV_ACTION, "fg": COLOR_FG_NAV_ACTION},
+    },
 }
+
+# Backward-compat aliases for tests that import the old names
+NAV_KEYMAP = NAV_KEYMAPS[(5, 3)]
+NAV_BUTTON_STYLES = NAV_STYLES[(5, 3)]
 
 # macOS key codes for arrow keys
 ARROW_KEY_CODES = {"Up": 126, "Down": 125, "Left": 123, "Right": 124}
@@ -344,10 +516,29 @@ class DeckController:
         self._snap_candidates = {}     # window_id -> {pos, polls_stable, win}
         self._controller_win_id = None  # Quartz window ID of the controller terminal
 
+        # Grid dimensions — defaults for 5x3, overridden by _init_grid() after deck.open()
+        self._init_grid(COLS, ROWS)
+
         # Lock for shared state between poll thread and key callback thread.
         # Protects: active_slot, mode, slot_status, slot_tty, slot_cwd,
         # blink_on, _controller_win_id, config
         self._lock = threading.Lock()
+
+    # ─── Grid Setup ────────────────────────────────────────────────────
+
+    def _init_grid(self, cols, rows):
+        """Set grid dimensions from detected device. Called with defaults in
+        __init__ and again after deck.open() with actual device dimensions."""
+        self.cols = cols
+        self.rows = rows
+        self.total_keys = cols * rows
+        self.enter_key_index = self.total_keys - 1
+        self.deck_terminal_slots = self.total_keys - 1
+        self.grid_key = (cols, rows)
+
+    def _get_available_layouts(self):
+        """Layout names available for the current grid size."""
+        return list(LAYOUTS.get(self.grid_key, LAYOUTS[(5, 3)]).keys())
 
     # ─── Config ───────────────────────────────────────────────────────
 
@@ -394,9 +585,10 @@ class DeckController:
     # ─── Layout ──────────────────────────────────────────────────────
 
     def _get_layout(self):
-        """Get the current layout mapping (list of 15 terminal names)."""
+        """Get the current layout mapping for this device's grid size."""
+        grid_layouts = LAYOUTS.get(self.grid_key, LAYOUTS[(5, 3)])
         name = self.config.get("layout", "default")
-        return LAYOUTS.get(name, LAYOUTS["default"])
+        return grid_layouts.get(name, grid_layouts["default"])
 
     def _get_terminal_names(self):
         """Get unique terminal names in the current layout (excluding ENTER), in order."""
@@ -930,10 +1122,10 @@ end tell
 
     def _grid_rect(self, slot):
         """Screen rectangle for a grid slot (0-indexed, row-major)."""
-        col = slot % COLS
-        row = slot // COLS
-        cell_w = self.screen["w"] / COLS
-        cell_h = self.screen["h"] / ROWS
+        col = slot % self.cols
+        row = slot // self.cols
+        cell_w = self.screen["w"] / self.cols
+        cell_h = self.screen["h"] / self.rows
         x = self.screen["x"] + col * cell_w
         y = self.screen["y"] + row * cell_h
         return {
@@ -1009,7 +1201,7 @@ end tell
         # Place controller window in slot 14 (bottom-right, always single cell)
         if controller_win:
             logger.info("Controller terminal -> slot 14")
-            self._move_window_to_rect(controller_win, self._grid_rect(GRID_SLOTS - 1))
+            self._move_window_to_rect(controller_win, self._grid_rect(self.enter_key_index))
             self._controller_win_id = controller_win["id"]
         else:
             self._controller_win_id = None
@@ -1088,7 +1280,7 @@ end tell
                     and abs(win["h"] - r["h"]) <= 2):
                 return True
         # Also check the enter slot
-        r = self._grid_rect(ENTER_KEY_INDEX)
+        r = self._grid_rect(self.enter_key_index)
         if (abs(win["x"] - r["x"]) <= 2
                 and abs(win["y"] - r["y"]) <= 2
                 and abs(win["w"] - r["w"]) <= 2
@@ -1144,7 +1336,7 @@ end tell
                         if not self._is_snapped(win):
                             # Controller always snaps to slot 14
                             if wid == self._controller_win_id:
-                                r = self._grid_rect(ENTER_KEY_INDEX)
+                                r = self._grid_rect(self.enter_key_index)
                                 logger.info("Snapping controller window to slot 14")
                                 self._move_window_to_rect(win, r)
                                 snapped_any = True
@@ -1295,7 +1487,7 @@ end tell
             # If this is the controller window, always slot 14
             win_id = w.get("kCGWindowNumber", 0)
             if win_id and win_id == self._controller_win_id:
-                return ENTER_KEY_INDEX
+                return self.enter_key_index
             win_cx = bounds.get("X", 0) + bw / 2
             win_cy = bounds.get("Y", 0) + bh / 2
             # Match against terminal zones (handles merged slots)
@@ -1522,7 +1714,7 @@ end tell
 
     def _draw_grid_mode(self):
         layout = self._get_layout()
-        for i in range(DECK_TERMINAL_SLOTS):
+        for i in range(self.deck_terminal_slots):
             label = layout[i] if i < len(layout) else f"T{i+1}"
             bg, fg, border = self._get_slot_style(i)
             # Resolve CWD subtitle for this slot
@@ -1533,31 +1725,38 @@ end tell
             self.deck.set_key_image(
                 i, self._render_button(label, bg, fg, border_color=border, subtitle=subtitle)
             )
-        # Enter key (always present, no subtitle)
+        # Enter key (always last key, no subtitle)
         self.deck.set_key_image(
-            ENTER_KEY_INDEX,
+            self.enter_key_index,
             self._render_button("⏎", COLOR_BG_ENTER, COLOR_FG_ENTER),
         )
 
     def _get_nav_style(self, key):
         """Get nav button style with config color overrides."""
-        style = NAV_BUTTON_STYLES.get(key)
+        styles = NAV_STYLES.get(self.grid_key, NAV_STYLES[(5, 3)])
+        style = styles.get(key)
         if style is None:
             return None
         # Override colors from config
         label = style["label"]
         bg = style["bg"]
         fg = style["fg"]
-        if key in (0, 1, 2, 3, 4):  # number keys
-            bg = self._color(f"num_{key+1}", bg)
-        elif key in (7, 11, 12, 13):  # arrows
-            bg = self._color("arrows", bg)
-        elif key in (10, 14):  # MIC, Enter
-            bg = self._color("mic_enter", bg)
+        # Determine action type from keymap for color overrides
+        keymap = NAV_KEYMAPS.get(self.grid_key, NAV_KEYMAPS[(5, 3)])
+        action = keymap.get(key)
+        if action:
+            kind = action[0]
+            if kind == "num":
+                num_idx = int(action[1])
+                bg = self._color(f"num_{num_idx}", bg)
+            elif kind == "arrow":
+                bg = self._color("arrows", bg)
+            elif kind in ("whisprflow", "enter"):
+                bg = self._color("mic_enter", bg)
         return {"label": label, "bg": bg, "fg": fg}
 
     def _draw_nav_mode(self):
-        for i in range(TOTAL_KEYS):
+        for i in range(self.total_keys):
             border = self._color("active", COLOR_BG_ACTIVE) if i == self.active_slot else None
             style = self._get_nav_style(i)
             if style:
@@ -1589,12 +1788,12 @@ end tell
         """Process a key event (called under self._lock)."""
         if self.mode == MODE_GRID:
             # Enter key fires immediately on press (no hold behavior)
-            if key == ENTER_KEY_INDEX:
+            if key == self.enter_key_index:
                 if pressed:
                     self._send_key("Return")
                 return
 
-            if key >= DECK_TERMINAL_SLOTS:
+            if key >= self.deck_terminal_slots:
                 return
 
             # Resolve merged keys to primary slot
@@ -1633,7 +1832,8 @@ end tell
             self._update_all_buttons()
 
     def _handle_nav_key(self, key):
-        action = NAV_KEYMAP.get(key)
+        keymap = NAV_KEYMAPS.get(self.grid_key, NAV_KEYMAPS[(5, 3)])
+        action = keymap.get(key)
         if action is None:
             return
 
@@ -1903,13 +2103,22 @@ end tell
         self.deck.reset()
         self.deck.set_brightness(self.config["brightness"])
 
+        # Detect grid dimensions from connected device
+        deck_rows, deck_cols = self.deck.key_layout()  # returns (rows, cols)
+        self._init_grid(deck_cols, deck_rows)
         key_count = self.deck.key_count()
-        logger.info("Connected: %s (%d keys)", self.deck.deck_type(), key_count)
-
-        if key_count != TOTAL_KEYS:
-            logger.warning("Expected %d keys but deck has %d — layout may not work correctly", TOTAL_KEYS, key_count)
-            print(f"Warning: this script expects {TOTAL_KEYS} keys but your deck has {key_count}.")
-            print("The key layout may not work correctly.")
+        profile = DEVICE_PROFILES.get(self.grid_key)
+        if profile:
+            logger.info("Connected: %s — %s (%dx%d, %d keys)",
+                        self.deck.deck_type(), profile["name"],
+                        self.cols, self.rows, key_count)
+        else:
+            logger.error("Unsupported deck: %s (%dx%d, %d keys)",
+                         self.deck.deck_type(), self.cols, self.rows, key_count)
+            print(f"Unsupported Stream Deck model: {self.deck.deck_type()} ({self.cols}x{self.rows})")
+            print("Supported: " + ", ".join(p["name"] for p in DEVICE_PROFILES.values()))
+            self.deck.close()
+            sys.exit(1)
 
         # Tile windows into grid
         logger.info("Tiling terminal windows...")
@@ -2014,12 +2223,36 @@ end tell
                     self.wfile.write(content)
                 elif path == "/api/settings":
                     self._json_response(controller_ref.config)
+                elif path == "/api/layouts":
+                    # Optional ?grid=CxR param to preview other device layouts
+                    params = dict(p.split("=", 1) for p in urlparse(self.path).query.split("&") if "=" in p)
+                    grid_param = params.get("grid")
+                    if grid_param and "x" in grid_param:
+                        try:
+                            pc, pr = grid_param.split("x")
+                            grid_key = (int(pc), int(pr))
+                        except (ValueError, TypeError):
+                            grid_key = controller_ref.grid_key
+                    else:
+                        grid_key = controller_ref.grid_key
+                    cols, rows = grid_key
+                    grid_layouts = LAYOUTS.get(grid_key, {})
+                    self._json_response({
+                        "cols": cols,
+                        "rows": rows,
+                        "layouts": {name: arr for name, arr in grid_layouts.items()},
+                        "devices": {f"{c}x{r}": p["name"] for (c, r), p in DEVICE_PROFILES.items()},
+                        "connected": f"{controller_ref.cols}x{controller_ref.rows}",
+                    })
                 elif path == "/api/status":
                     if controller_ref.running and controller_ref.deck:
                         self._json_response({
                             "running": True,
                             "deck": controller_ref.deck.deck_type(),
+                            "grid": f"{controller_ref.cols}x{controller_ref.rows}",
+                            "keys": controller_ref.total_keys,
                             "terminals": len(controller_ref.slot_tty),
+                            "layouts": controller_ref._get_available_layouts(),
                         })
                     else:
                         self._json_response({"running": False})

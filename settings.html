@@ -301,94 +301,14 @@
 <div class="section">
   <h2>Layout</h2>
   <input type="hidden" id="layout" value="default">
-  <div class="layout-grid">
-    <div class="layout-card" data-layout="default" onclick="selectLayout('default')">
-      <div class="layout-label">Default</div>
-      <svg viewBox="0 0 50 30" class="layout-svg">
-        <rect x="1" y="1" width="9" height="9" rx="1"/>
-        <rect x="11" y="1" width="9" height="9" rx="1"/>
-        <rect x="21" y="1" width="9" height="9" rx="1"/>
-        <rect x="31" y="1" width="9" height="9" rx="1"/>
-        <rect x="41" y="1" width="8" height="9" rx="1"/>
-        <rect x="1" y="11" width="9" height="9" rx="1"/>
-        <rect x="11" y="11" width="9" height="9" rx="1"/>
-        <rect x="21" y="11" width="9" height="9" rx="1"/>
-        <rect x="31" y="11" width="9" height="9" rx="1"/>
-        <rect x="41" y="11" width="8" height="9" rx="1"/>
-        <rect x="1" y="21" width="9" height="8" rx="1"/>
-        <rect x="11" y="21" width="9" height="8" rx="1"/>
-        <rect x="21" y="21" width="9" height="8" rx="1"/>
-        <rect x="31" y="21" width="9" height="8" rx="1"/>
-        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
-      </svg>
-      <div class="layout-count">14 terminals</div>
+  <div class="row" style="margin-bottom:12px">
+    <div>
+      <label>Preview Device</label>
+      <div class="sublabel">Browse layouts for other Stream Deck models</div>
     </div>
-    <div class="layout-card" data-layout="quad" onclick="selectLayout('quad')">
-      <div class="layout-label">Quad</div>
-      <svg viewBox="0 0 50 30" class="layout-svg">
-        <rect x="1" y="1" width="19" height="19" rx="1" class="big-zone"/>
-        <rect x="21" y="1" width="9" height="9" rx="1"/>
-        <rect x="31" y="1" width="9" height="9" rx="1"/>
-        <rect x="41" y="1" width="8" height="9" rx="1"/>
-        <rect x="21" y="11" width="9" height="9" rx="1"/>
-        <rect x="31" y="11" width="9" height="9" rx="1"/>
-        <rect x="41" y="11" width="8" height="9" rx="1"/>
-        <rect x="1" y="21" width="9" height="8" rx="1"/>
-        <rect x="11" y="21" width="9" height="8" rx="1"/>
-        <rect x="21" y="21" width="9" height="8" rx="1"/>
-        <rect x="31" y="21" width="9" height="8" rx="1"/>
-        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
-      </svg>
-      <div class="layout-count">11 terminals</div>
-    </div>
-    <div class="layout-card" data-layout="double_quad" onclick="selectLayout('double_quad')">
-      <div class="layout-label">Double Quad</div>
-      <svg viewBox="0 0 50 30" class="layout-svg">
-        <rect x="1" y="1" width="19" height="19" rx="1" class="big-zone"/>
-        <rect x="21" y="1" width="19" height="19" rx="1" class="big-zone"/>
-        <rect x="41" y="1" width="8" height="9" rx="1"/>
-        <rect x="41" y="11" width="8" height="9" rx="1"/>
-        <rect x="1" y="21" width="9" height="8" rx="1"/>
-        <rect x="11" y="21" width="9" height="8" rx="1"/>
-        <rect x="21" y="21" width="9" height="8" rx="1"/>
-        <rect x="31" y="21" width="9" height="8" rx="1"/>
-        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
-      </svg>
-      <div class="layout-count">8 terminals</div>
-    </div>
-    <div class="layout-card" data-layout="wide" onclick="selectLayout('wide')">
-      <div class="layout-label">Wide</div>
-      <svg viewBox="0 0 50 30" class="layout-svg">
-        <rect x="1" y="1" width="29" height="19" rx="1" class="big-zone"/>
-        <rect x="31" y="1" width="9" height="9" rx="1"/>
-        <rect x="41" y="1" width="8" height="9" rx="1"/>
-        <rect x="31" y="11" width="9" height="9" rx="1"/>
-        <rect x="41" y="11" width="8" height="9" rx="1"/>
-        <rect x="1" y="21" width="9" height="8" rx="1"/>
-        <rect x="11" y="21" width="9" height="8" rx="1"/>
-        <rect x="21" y="21" width="9" height="8" rx="1"/>
-        <rect x="31" y="21" width="9" height="8" rx="1"/>
-        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
-      </svg>
-      <div class="layout-count">9 terminals</div>
-    </div>
-    <div class="layout-card" data-layout="half" onclick="selectLayout('half')">
-      <div class="layout-label">Half</div>
-      <svg viewBox="0 0 50 30" class="layout-svg">
-        <rect x="1" y="1" width="19" height="28" rx="1" class="big-zone"/>
-        <rect x="21" y="1" width="9" height="9" rx="1"/>
-        <rect x="31" y="1" width="9" height="9" rx="1"/>
-        <rect x="41" y="1" width="8" height="9" rx="1"/>
-        <rect x="21" y="11" width="9" height="9" rx="1"/>
-        <rect x="31" y="11" width="9" height="9" rx="1"/>
-        <rect x="41" y="11" width="8" height="9" rx="1"/>
-        <rect x="21" y="21" width="9" height="8" rx="1"/>
-        <rect x="31" y="21" width="9" height="8" rx="1"/>
-        <rect x="41" y="21" width="8" height="8" rx="1" class="enter-key"/>
-      </svg>
-      <div class="layout-count">6 terminals</div>
-    </div>
+    <select id="devicePreview" onchange="onDevicePreviewChange()"></select>
   </div>
+  <div class="layout-grid" id="layoutGrid"></div>
 </div>
 
 <div class="section">
@@ -590,7 +510,7 @@
       const s = await res.json();
       document.getElementById('brightness').value = s.brightness || 80;
       document.getElementById('brightnessVal').textContent = s.brightness || 80;
-      selectLayout(s.layout || 'default', false);
+      document.getElementById('layout').value = s.layout || 'default';
       document.getElementById('hold_threshold').value = s.hold_threshold || 0.5;
       document.getElementById('poll_interval').value = s.poll_interval || 0.2;
       document.getElementById('snap_enabled').checked = s.snap_enabled !== false;
@@ -615,6 +535,9 @@
         document.getElementById('micDisplay').textContent = mic;
         document.getElementById('mic_command').value = mic;
       }
+
+      // Load layout cards dynamically for the connected deck
+      await loadLayouts(s.layout || 'default');
     } catch (e) {
       showToast('Failed to load settings');
     }
@@ -685,12 +608,105 @@
       const text = document.getElementById('statusText');
       if (s.running) {
         dot.classList.add('active');
-        text.textContent = s.deck + ' \u2014 ' + s.terminals + ' terminal(s) mapped';
+        text.textContent = s.deck + ' (' + s.grid + ') \u2014 ' + s.terminals + ' terminal(s) mapped';
       } else {
         dot.classList.remove('active');
         text.textContent = 'Not running';
       }
     } catch (e) {}
+  }
+
+  function buildLayoutSVG(layoutArr, cols, rows) {
+    const gap = 1;
+    const svgW = cols * 10 + gap;
+    const svgH = rows * 10 + gap;
+    const cellW = (svgW - gap) / cols;
+    const cellH = (svgH - gap) / rows;
+    // Find merged zones: group by terminal name
+    const zones = {};
+    layoutArr.forEach((name, idx) => {
+      if (!zones[name]) zones[name] = [];
+      zones[name].push(idx);
+    });
+    let rects = '';
+    const drawn = new Set();
+    for (const [name, keys] of Object.entries(zones)) {
+      if (drawn.has(name)) continue;
+      drawn.add(name);
+      const kCols = keys.map(k => k % cols);
+      const kRows = keys.map(k => Math.floor(k / cols));
+      const minC = Math.min(...kCols), maxC = Math.max(...kCols);
+      const minR = Math.min(...kRows), maxR = Math.max(...kRows);
+      const x = gap + minC * cellW;
+      const y = gap + minR * cellH;
+      const w = (maxC - minC + 1) * cellW - gap;
+      const h = (maxR - minR + 1) * cellH - gap;
+      let cls = '';
+      if (name === 'ENTER') cls = 'enter-key';
+      else if (keys.length > 1) cls = 'big-zone';
+      rects += '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="1"' + (cls ? ' class="'+cls+'"' : '') + '/>';
+    }
+    return '<svg viewBox="0 0 '+svgW+' '+svgH+'" class="layout-svg">'+rects+'</svg>';
+  }
+
+  let connectedGrid = null;
+  let previewingOtherDevice = false;
+
+  async function loadLayouts(currentLayout, gridOverride) {
+    try {
+      const url = gridOverride ? '/api/layouts?grid=' + gridOverride : '/api/layouts';
+      const res = await fetch(url);
+      const data = await res.json();
+
+      // Populate device dropdown on first load
+      const deviceSelect = document.getElementById('devicePreview');
+      if (data.devices && deviceSelect.options.length === 0) {
+        connectedGrid = data.connected;
+        for (const [grid, name] of Object.entries(data.devices)) {
+          const opt = document.createElement('option');
+          opt.value = grid;
+          opt.textContent = name + ' (' + grid + ')' + (grid === connectedGrid ? ' \u2014 connected' : '');
+          if (grid === connectedGrid) opt.selected = true;
+          deviceSelect.appendChild(opt);
+        }
+      }
+
+      previewingOtherDevice = gridOverride && gridOverride !== connectedGrid;
+
+      const grid = document.getElementById('layoutGrid');
+      grid.innerHTML = '';
+      const cols = data.cols;
+      const rows = data.rows;
+      const layoutNames = Object.keys(data.layouts);
+      grid.style.gridTemplateColumns = 'repeat(' + Math.min(layoutNames.length, 6) + ', 1fr)';
+      for (const name of layoutNames) {
+        const arr = data.layouts[name];
+        const terminals = new Set(arr.filter(t => t !== 'ENTER')).size;
+        const card = document.createElement('div');
+        card.className = 'layout-card' + (name === currentLayout && !previewingOtherDevice ? ' active' : '');
+        card.dataset.layout = name;
+        if (previewingOtherDevice) {
+          card.style.opacity = '0.7';
+          card.style.cursor = 'default';
+        } else {
+          card.onclick = () => selectLayout(name);
+        }
+        const displayName = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        card.innerHTML =
+          '<div class="layout-label">' + displayName + '</div>' +
+          buildLayoutSVG(arr, cols, rows) +
+          '<div class="layout-count">' + terminals + ' terminals</div>';
+        grid.appendChild(card);
+      }
+    } catch (e) {
+      // Fallback: if API unavailable, show nothing
+    }
+  }
+
+  function onDevicePreviewChange() {
+    const grid = document.getElementById('devicePreview').value;
+    const currentLayout = document.getElementById('layout').value;
+    loadLayouts(currentLayout, grid);
   }
 
   function selectLayout(name, save) {
