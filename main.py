@@ -108,7 +108,7 @@ import CoreFoundation
 # ═══════════════════════════════════════════════════════════════════════
 
 # All terminal apps to include in the grid (windows from any of these get tiled)
-TERMINAL_APPS = {"Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty", "Hyper"}
+TERMINAL_APPS = {"Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "kitty", "Hyper", "Ghostty"}
 COLS = 5
 ROWS = 3
 HOLD_THRESHOLD_SEC = 0.5        # hold longer than this → trigger Whisprflow
@@ -833,7 +833,7 @@ class DeckController:
                     if (r["x"] <= win_cx <= r["x"] + r["w"]
                             and r["y"] <= win_cy <= r["y"] + r["h"]):
                         primary = self._terminal_to_active_slot(name)
-                        if primary not in tty_map:
+                        if primary not in tty_map and info.get("tty"):
                             tty_map[primary] = info["tty"]
                         break
 
@@ -948,6 +948,8 @@ tell application "iTerm2"
     return output
 end tell
 '''
+        elif app_name == "Ghostty":
+            return self._get_ghostty_window_ttys()
         else:
             return []
 
@@ -983,6 +985,172 @@ end tell
         except Exception:
             logger.warning("Failed to get terminal windows", exc_info=True)
             return []
+
+    def _get_ghostty_window_ttys(self):
+        """Get TTY and bounds for each Ghostty window via CWD matching.
+
+        Ghostty's AppleScript API exposes 'working directory' but not 'tty'.
+        We match each window's CWD against the CWDs of Ghostty's child shell
+        processes to resolve TTYs indirectly.
+
+        Limitation: windows sharing the same CWD can't be distinguished —
+        only the first match gets a TTY. The rest still tile/activate.
+
+        TODO: Switch to direct 'tty of terminal' once Ghostty ships it
+        (see https://github.com/ghostty-org/ghostty/pull/11922).
+        """
+        # Step 1: Get window bounds (System Events) + CWD (Ghostty scripting)
+        # Ghostty's AppleScript dictionary doesn't include 'bounds' on windows,
+        # so we get position/size from System Events and CWD from Ghostty.
+        script = '''
+-- Get CWDs from Ghostty scripting API
+tell application "Ghostty"
+    set cwds to {}
+    repeat with i from 1 to count of windows
+        try
+            set t to focused terminal of selected tab of window i
+            set end of cwds to working directory of t
+        on error
+            set end of cwds to "?"
+        end try
+    end repeat
+end tell
+
+-- Get bounds from System Events, pair with CWDs
+tell application "System Events"
+    tell process "Ghostty"
+        set output to ""
+        set i to 1
+        repeat with w in windows
+            set p to position of w
+            set s to size of w
+            set d to item i of cwds
+            set output to output & (item 1 of p as text) & "," & (item 2 of p as text) & "," & ((item 1 of p) + (item 1 of s) as text) & "," & ((item 2 of p) + (item 2 of s) as text) & "," & d & linefeed
+            set i to i + 1
+        end repeat
+        return output
+    end tell
+end tell
+'''
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script], capture_output=True, text=True, timeout=10
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return []
+        except Exception:
+            logger.warning("Failed to query Ghostty windows", exc_info=True)
+            return []
+
+        # Parse AppleScript output into window dicts with CWD
+        win_entries = []
+        for line in result.stdout.strip().split("\n"):
+            parts = line.strip().split(",", 4)  # limit split — CWD may contain commas
+            if len(parts) >= 5:
+                try:
+                    left, top, right, bottom = (
+                        int(parts[0]), int(parts[1]),
+                        int(parts[2]), int(parts[3]),
+                    )
+                    cwd = parts[4].strip()
+                    win_entries.append({
+                        "x": left, "y": top,
+                        "w": right - left, "h": bottom - top,
+                        "cwd": cwd,
+                    })
+                except ValueError:
+                    continue
+
+        if not win_entries:
+            return []
+
+        # Step 2: Build CWD → TTY map from Ghostty's child shell processes
+        cwd_to_tty = self._build_ghostty_cwd_tty_map()
+
+        # Step 3: Match windows to TTYs by CWD
+        used_ttys = set()
+        windows = []
+        for entry in win_entries:
+            tty = cwd_to_tty.get(entry["cwd"])
+            if tty and tty not in used_ttys:
+                used_ttys.add(tty)
+                windows.append({
+                    "x": entry["x"], "y": entry["y"],
+                    "w": entry["w"], "h": entry["h"],
+                    "tty": tty,
+                })
+            else:
+                # No TTY match — still include for tiling/activation
+                windows.append({
+                    "x": entry["x"], "y": entry["y"],
+                    "w": entry["w"], "h": entry["h"],
+                    "tty": None,
+                })
+        return windows
+
+    def _build_ghostty_cwd_tty_map(self):
+        """Build a map of CWD → TTY for Ghostty's child shell processes.
+        Returns dict like {"/Users/cory/project": "ttys003"}."""
+        try:
+            # Find Ghostty's PID(s)
+            result = subprocess.run(
+                ["pgrep", "-xi", "ghostty"], capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return {}
+
+            ghostty_pids = result.stdout.strip().split("\n")
+
+            # Find descendant shell processes with their TTYs.
+            # Ghostty's children are in different process groups, so ps -g
+            # doesn't work. Walk the tree: ghostty → login → shell.
+            all_children = []
+            search_pids = [p.strip() for p in ghostty_pids]
+            for _ in range(3):  # max 3 levels deep (ghostty → login → shell)
+                if not search_pids:
+                    break
+                next_pids = []
+                for pid in search_pids:
+                    result = subprocess.run(
+                        ["pgrep", "-P", pid],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if result.returncode == 0:
+                        for cpid in result.stdout.strip().split("\n"):
+                            cpid = cpid.strip()
+                            if cpid:
+                                next_pids.append(cpid)
+                                # Get this child's TTY
+                                tty_result = subprocess.run(
+                                    ["ps", "-o", "tty=", "-p", cpid],
+                                    capture_output=True, text=True, timeout=5,
+                                )
+                                if tty_result.returncode == 0:
+                                    tty = tty_result.stdout.strip()
+                                    if tty:
+                                        all_children.append((cpid, tty))
+                search_pids = next_pids
+
+            # For each child with a TTY, resolve its CWD
+            cwd_to_tty = {}
+            for pid, tty in all_children:
+                if tty == "??" or not tty.startswith("ttys"):
+                    continue
+                result = subprocess.run(
+                    ["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split("\n"):
+                        if line.startswith("n"):
+                            cwd = line[1:]
+                            if cwd not in cwd_to_tty:
+                                cwd_to_tty[cwd] = tty
+                            break
+            return cwd_to_tty
+        except Exception:
+            logger.debug("Failed to build Ghostty CWD→TTY map", exc_info=True)
+            return {}
 
     def _read_status_files(self):
         """Read hook status files and update slot_status.

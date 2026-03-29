@@ -176,7 +176,7 @@ Claude Code hooks fire on state changes (tool use, permission prompts, idle) and
 
 ## Terminal Apps Supported
 
-Terminal.app and iTerm2 have full TTY mapping (status colors per window). Other apps (Warp, Alacritty, kitty, Hyper) will tile and activate but won't show per-session status colors.
+Terminal.app and iTerm2 have full TTY mapping (status colors per window). Ghostty has TTY mapping via CWD matching — works when each window is in a different directory (the typical Claude Code multi-project setup). Other apps (Warp, Alacritty, kitty, Hyper) will tile and activate but won't show per-session status colors.
 
 ## Contributing
 
