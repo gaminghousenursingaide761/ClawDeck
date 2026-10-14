@@ -46,8 +46,10 @@ def build_hooks(deck_hook_path):
 
 def is_our_entry(entry):
     """Check if a hook entry belongs to clawdeck."""
-    for hook in entry.get("hooks", []):
-        if hook.get("_source") == SOURCE_TAG:
+    if not isinstance(entry, dict):
+        return False
+    for hook in entry.get("hooks") or []:
+        if isinstance(hook, dict) and hook.get("_source") == SOURCE_TAG:
             return True
     return False
 
